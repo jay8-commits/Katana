@@ -152,31 +152,60 @@ object DeviceIdReader {
     }
 
     /**
-     * Retrieves the currently configured Injected Android ID from persistent SharedPreferences.
+     * Retrieves the currently configured Injected Android ID from persistent SharedPreferences or DeviceIdProvider.
      */
     fun getSavedInjectedAndroidId(context: Context): String {
+        val providerId = com.example.deviceidlab.provider.DeviceIdProvider.activeAndroidTestId
+        if (providerId.isNotBlank() && providerId != "NPATCH_ANDROID_001" && providerId != "NPATCH_TEST_001") return providerId
+
         return try {
             val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
             val saved = prefs.getString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, null)
-            if (!saved.isNullOrEmpty()) saved else (InterceptionBridge.activeSimulatedAndroidId.value ?: "")
+            if (!saved.isNullOrEmpty()) saved else (InterceptionBridge.activeSimulatedAndroidId.value ?: providerId)
         } catch (_: Throwable) {
-            InterceptionBridge.activeSimulatedAndroidId.value ?: ""
+            InterceptionBridge.activeSimulatedAndroidId.value ?: providerId
         }
     }
 
     /**
-     * Persists the Injected Android ID to SharedPreferences so NPatch XSharedPreferences in hooked
-     * processes can read it.
+     * Retrieves the currently configured Injected Telephony ID from persistent SharedPreferences or DeviceIdProvider.
      */
-    fun saveInjectedAndroidId(context: Context, id: String) {
+    fun getSavedInjectedTelephonyId(context: Context): String {
+        val providerId = com.example.deviceidlab.provider.DeviceIdProvider.activeTelephonyTestId
+        if (providerId.isNotBlank() && providerId != "NPATCH_TELEPHONY_001") return providerId
+
+        return try {
+            val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
+            val saved = prefs.getString(NPatchHookEntry.KEY_ACTIVE_TELEPHONY_ID, null)
+            if (!saved.isNullOrEmpty()) saved else (InterceptionBridge.activeSimulatedTelephonyId.value ?: providerId)
+        } catch (_: Throwable) {
+            InterceptionBridge.activeSimulatedTelephonyId.value ?: providerId
+        }
+    }
+
+    /**
+     * Persists the Injected IDs to SharedPreferences and DeviceIdProvider so NPatch
+     * hooks in all target processes dynamically read it via ContentResolver.
+     */
+    fun saveInjectedIds(context: Context, androidId: String, telephonyId: String) {
+        com.example.deviceidlab.provider.DeviceIdProvider.updateTestIds(context, androidId, telephonyId)
         try {
             val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
             prefs.edit()
-                .putString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, id)
+                .putString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, androidId)
+                .putString(NPatchHookEntry.KEY_ACTIVE_TELEPHONY_ID, telephonyId)
                 .putBoolean(NPatchHookEntry.KEY_INTERCEPTION_ENABLED, true)
                 .commit()
         } catch (_: Throwable) {}
-        InterceptionBridge.setSimulatedAndroidId(id)
+        InterceptionBridge.updateActiveSimulatedIds(androidId, telephonyId)
+    }
+
+    fun saveInjectedAndroidId(context: Context, id: String) {
+        saveInjectedIds(context, id, getSavedInjectedTelephonyId(context))
+    }
+
+    fun saveInjectedTelephonyId(context: Context, id: String) {
+        saveInjectedIds(context, getSavedInjectedAndroidId(context), id)
     }
 
     /**
@@ -317,6 +346,18 @@ object DeviceIdReader {
     @SuppressLint("HardwareIds")
     fun readTelephonyDeviceId(context: Context): RealIdResult {
         return try {
+            val intercepted = DeviceIdHookDemo.interceptTelephonyGetDeviceId(
+                callerPackage = context.packageName,
+                originalProvider = { null }
+            )
+            if (!intercepted.isNullOrBlank()) {
+                return RealIdResult(
+                    value = intercepted,
+                    isRestricted = false,
+                    statusDetail = "Retrieved via TelephonyManager (NPatch Intercepted)"
+                )
+            }
+
             val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             val mgr = telephonyManager ?: return RealIdResult(
                 value = "Unavailable (No cellular hardware)",

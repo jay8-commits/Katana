@@ -135,6 +135,41 @@ class DeviceIdReaderTest {
     }
 
     @Test
+    fun testMultiGenerationDynamicDualIdWorkflow_WithoutRepatching() {
+        InterceptionBridge.setInterceptionActive(true)
+
+        // Generation #1
+        val gen1Android = "NPATCH_ANDROID_001"
+        val gen1Telephony = "NPATCH_TELEPHONY_001"
+        DeviceIdReader.saveInjectedIds(context, gen1Android, gen1Telephony)
+
+        assertEquals("Provider Android ID #1", gen1Android, com.example.deviceidlab.provider.DeviceIdProvider.activeAndroidTestId)
+        assertEquals("Provider Telephony ID #1", gen1Telephony, com.example.deviceidlab.provider.DeviceIdProvider.activeTelephonyTestId)
+        assertEquals("Target Read Android ID #1", gen1Android, DeviceIdReader.readAndroidId(context).value)
+        assertEquals("Target Read Telephony ID #1", gen1Telephony, DeviceIdReader.readTelephonyDeviceId(context).value)
+
+        // Generation #2 (Without repatching or reinstalling)
+        val gen2Android = "NPATCH_ANDROID_002"
+        val gen2Telephony = "NPATCH_TELEPHONY_002"
+        DeviceIdReader.saveInjectedIds(context, gen2Android, gen2Telephony)
+
+        assertEquals("Provider Android ID #2", gen2Android, com.example.deviceidlab.provider.DeviceIdProvider.activeAndroidTestId)
+        assertEquals("Provider Telephony ID #2", gen2Telephony, com.example.deviceidlab.provider.DeviceIdProvider.activeTelephonyTestId)
+        assertEquals("Target Read Android ID #2", gen2Android, DeviceIdReader.readAndroidId(context).value)
+        assertEquals("Target Read Telephony ID #2", gen2Telephony, DeviceIdReader.readTelephonyDeviceId(context).value)
+
+        // Generation #3 (Without repatching or reinstalling)
+        val gen3Android = "NPATCH_ANDROID_003"
+        val gen3Telephony = "NPATCH_TELEPHONY_003"
+        DeviceIdReader.saveInjectedIds(context, gen3Android, gen3Telephony)
+
+        assertEquals("Provider Android ID #3", gen3Android, com.example.deviceidlab.provider.DeviceIdProvider.activeAndroidTestId)
+        assertEquals("Provider Telephony ID #3", gen3Telephony, com.example.deviceidlab.provider.DeviceIdProvider.activeTelephonyTestId)
+        assertEquals("Target Read Android ID #3", gen3Android, DeviceIdReader.readAndroidId(context).value)
+        assertEquals("Target Read Telephony ID #3", gen3Telephony, DeviceIdReader.readTelephonyDeviceId(context).value)
+    }
+
+    @Test
     fun testVerifyNpatchInjection_unhookedBaseline() {
         val details = DeviceIdReader.verifyNpatchInjection(context, "com.example.deviceidlab")
         assertNotNull(details)

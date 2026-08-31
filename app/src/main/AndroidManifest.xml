@@ -40,6 +40,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.example.deviceidlab.TargetDemoActivity"
+            android:exported="true"
+            android:label="Target Demo App"
+            android:theme="@style/Theme.MyApplication" />
+
+        <!-- Exported Runtime Communication Provider for NPatch 1.0.7 Target Processes -->
+        <provider
+            android:name="com.example.deviceidlab.provider.DeviceIdProvider"
+            android:authorities="com.example.deviceidlab.provider"
+            android:exported="true"
+            android:multiprocess="false" />
     </application>
 
 </manifest>
