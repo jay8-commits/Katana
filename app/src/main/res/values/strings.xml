@@ -21,4 +21,28 @@
     <string name="pool_exhausted_title">ID POOL EXHAUSTED</string>
     <string name="pool_exhausted_desc">All 1,000,000 test identities have been used. Reset the database to restart identity allocation.</string>
     <string name="section_interception_demo">NPATCH / INTERCEPTION DEMONSTRATION</string>
+    <string name="section_npatch_test">NPATCH 1.0.7 HOOK INJECTION TEST</string>
+    <string name="btn_test_npatch_injection">TEST NPATCH INJECTION</string>
+    <string name="btn_test_id_injection">TEST ID INJECTION</string>
+    <string name="label_target_package">Target Package</string>
+    <string name="label_module_detected">Module Detected</string>
+    <string name="label_target_process">Target Process</string>
+    <string name="label_hook_entry_status">Hook Entry Status</string>
+    <string name="label_hook_install_status">Hook Installation Status</string>
+    <string name="label_canary_status">Canary Status</string>
+    <string name="label_last_hook_timestamp">Last Hook Timestamp</string>
+    <string name="result_injection_verified">INJECTION VERIFIED</string>
+    <string name="result_injection_not_detected">INJECTION NOT DETECTED</string>
+    <string name="status_hook_active">ACTIVE</string>
+    <string name="status_hook_inactive">STANDALONE / SIMULATED</string>
+    <string name="result_success_changed">SUCCESS — ID CHANGED</string>
+    <string name="result_failed_unchanged">FAILED — ID UNCHANGED</string>
+    <string name="label_inject_id">Injected Android ID (SharedPreferences)</string>
+    <string name="btn_save_injected_id">SAVE INJECT ID</string>
+    <string name="btn_generate_random_id">GENERATE RANDOM ID</string>
+    <string name="label_failure_reason">Failure Reason</string>
+    <string name="xposed_module_description">NPatch / LSPosed module for randomizing Android ID and hardware identifiers.</string>
+    <string-array name="xposed_scope">
+        <item>com.example.deviceidlab</item>
+    </string-array>
 </resources>

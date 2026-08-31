@@ -16,6 +16,14 @@
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Xposed / NPatch hook entry point and callbacks
+-keep class com.example.deviceidlab.hook.NPatchHookEntry { *; }
+-keep class * implements de.robv.android.xposed.IXposedHookLoadPackage { *; }
+-keep class * implements de.robv.android.xposed.IXposedHookZygoteInit { *; }
+-keep class * implements de.robv.android.xposed.IXposedHookInitPackageResources { *; }
+
+# Keep diagnostic canary method
+-keepclassmembers class com.example.deviceidlab.DeviceIdReader {
+    public static boolean isNpatchHookActive();
+}
+

@@ -78,6 +78,7 @@ secrets {
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
+  compileOnly(libs.xposed.api)
   implementation(project(":demo-module"))
   implementation(platform(libs.androidx.compose.bom))
   // implementation(platform(libs.firebase.bom))
@@ -131,6 +132,7 @@ dependencies {
   testImplementation(libs.roborazzi)
   testImplementation(libs.roborazzi.compose)
   testImplementation(libs.roborazzi.junit.rule)
+  testImplementation(libs.xposed.api)
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   androidTestImplementation(libs.androidx.espresso.core)

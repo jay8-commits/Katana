@@ -60,3 +60,11 @@ fun MyApplicationTheme(
 
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }
+
+@Composable
+fun DeviceIdLabTheme(
+  darkTheme: Boolean = isSystemInDarkTheme(),
+  dynamicColor: Boolean = true,
+  content: @Composable () -> Unit
+) = MyApplicationTheme(darkTheme = darkTheme, dynamicColor = dynamicColor, content = content)
+

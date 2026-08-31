@@ -146,22 +146,42 @@ Room SQLite database persists identity state:
 
 ---
 
-## NPatch / Interception Layer Demonstration
+## NPatch 1.0.7 / Xposed Module & Real-Device Validation Guide
 
-The `demo-module` demonstrates how a runtime instrumentation module intercepts device identifier calls made by the controlled test application:
+This module can modify `ANDROID_ID` requests made through the hooked Java `Settings.Secure.getString()` API when the target application is running under a compatible NPatch 1.0.7 or Xposed/LSPosed instrumentation environment.
 
-1. **Target Verification:**
-   ```kotlin
-   if (callerPackage != "com.example.deviceidlab") {
-       return originalValue // Unrelated apps are NEVER touched
-   }
-   ```
-2. **Method Interception:**
-   - `Settings.Secure.getString(ContentResolver, "android_id")` $\rightarrow$ Returns active `androidTestId`.
-   - `TelephonyManager.getDeviceId()` $\rightarrow$ Returns active `telephonyTestId`.
-   - Other settings keys (e.g. `bluetooth_name`) pass through untouched.
-3. **Live Invocation Logging:**
-   Every intercepted call is captured in the UI log feed with high-resolution timestamps, caller verification, and substitution status.
+> **Compatibility Boundary:** Applications using native NDK/C direct reads of `/data/system/users/0/settings_ssaid.xml`, direct Binder IPC, or privileged telephony APIs require specialized system-level hooks and are not intercepted by standard Java-level `Settings.Secure` hooks.
+
+### Real-Device Deployment Checklist (Non-Root NPatch 1.0.7)
+
+1. **Module APK:** Build `app-debug.apk` (this application acts as both the management dashboard and the NPatch/Xposed module containing `NPatchHookEntry`).
+2. **Target APK:** The application to test (e.g. `com.example.targetdemo` or `com.example.deviceidlab`).
+3. **Module Installation:** Install `DeviceIdRandomizationLab` directly onto the device via `adb install -r app-debug.apk`.
+4. **Target Patching:**
+   - Open **NPatch 1.0.7** on the device.
+   - Tap `+` (Patch Application) and select the target APK file or installed target app.
+   - Under **Embed Modules**, select `DeviceIdRandomizationLab`.
+   - Tap **Start Patching**.
+5. **Install Patched Target:**
+   - NPatch outputs the patched APK to `/sdcard/NPatch/` (or internal storage).
+   - If the target APK was previously installed from Google Play or standard debug build, uninstall the original target first due to signature differences.
+   - Install the generated `*-patched.apk`.
+6. **Configure & Inject:**
+   - Open `DeviceIdRandomizationLab`.
+   - In the **NPatch 1.0.7 Hook Injection Test** card, enter the desired 16-hex Android ID and tap **SAVE INJECT ID**.
+7. **Process Restart & Verification:**
+   - Force-stop / completely close the target app.
+   - Launch the patched target app.
+   - In `DeviceIdRandomizationLab`, tap **TEST ID INJECTION** or observe the target app displaying the injected ID directly.
+
+### LSPosed / Rooted Environments Checklist
+
+1. Install `DeviceIdRandomizationLab` APK on the rooted device.
+2. Open **LSPosed Manager** $\rightarrow$ **Modules** $\rightarrow$ Enable `DeviceIdRandomizationLab`.
+3. Set the **Scope** to include your target applications.
+4. Reboot the device or restart system server.
+5. In `DeviceIdRandomizationLab`, configure the injected ID.
+6. Force-stop and restart the target application.
 
 ---
 

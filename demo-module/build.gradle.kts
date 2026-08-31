@@ -25,6 +25,7 @@ android {
 }
 
 dependencies {
+  compileOnly(libs.xposed.api)
   implementation(libs.androidx.core.ktx)
   testImplementation(libs.junit)
 }

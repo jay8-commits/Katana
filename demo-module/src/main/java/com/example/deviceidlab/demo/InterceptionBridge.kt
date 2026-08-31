@@ -33,6 +33,10 @@ object InterceptionBridge {
         _isInterceptionActive.value = active
     }
 
+    fun setSimulatedAndroidId(id: String?) {
+        _activeSimulatedAndroidId.value = id
+    }
+
     fun updateActiveSimulatedIds(androidTestId: String?, telephonyTestId: String?) {
         _activeSimulatedAndroidId.value = androidTestId
         _activeSimulatedTelephonyId.value = telephonyTestId
