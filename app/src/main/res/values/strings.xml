@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">DeviceIdRandomizationLab</string>
+    <string name="app_title">Device ID Randomization Lab</string>
+    <string name="section_real_identifiers">REAL DEVICE IDENTIFIERS</string>
+    <string name="label_android_id">Android ID (Settings.Secure)</string>
+    <string name="label_telephony_id">Telephony Device ID (TelephonyManager)</string>
+    <string name="section_simulated_identity">SIMULATED IDENTITY</string>
+    <string name="label_simulated_test_value">SIMULATED / TEST VALUE</string>
+    <string name="label_identity_number">Identity Number</string>
+    <string name="label_android_test_id">Android Test ID</string>
+    <string name="label_telephony_test_id">Telephony Test ID</string>
+    <string name="label_created_at">Generated At</string>
+    <string name="label_pool_stats">Identity Pool Usage</string>
+    <string name="btn_generate_new">GENERATE NEW ID</string>
+    <string name="btn_refresh_real">REFRESH REAL VALUES</string>
+    <string name="btn_reset_database">RESET TEST DATABASE</string>
+    <string name="dialog_reset_title">Reset Test Database?</string>
+    <string name="dialog_reset_message">This will permanently clear all recorded used test identities from the local database and reset the 1,000,000 pool. Are you sure?</string>
+    <string name="dialog_reset_confirm">Reset</string>
+    <string name="dialog_reset_cancel">Cancel</string>
+    <string name="pool_exhausted_title">ID POOL EXHAUSTED</string>
+    <string name="pool_exhausted_desc">All 1,000,000 test identities have been used. Reset the database to restart identity allocation.</string>
+    <string name="section_interception_demo">NPATCH / INTERCEPTION DEMONSTRATION</string>
+</resources>

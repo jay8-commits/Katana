@@ -1,0 +1,6 @@
+{
+  "name": "DeviceIdRandomizationLab",
+  "description": "Educational laboratory demonstrating Android device identifier retrieval, platform restrictions, deterministic 1,000,000 test identity generation, Room persistence, and controlled method interception demonstration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
