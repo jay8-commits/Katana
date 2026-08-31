@@ -8,7 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import com.example.deviceidlab.hook.NPatchAuditManager
-import com.example.deviceidlab.hook.NPatchHookEntry
+import com.example.deviceidlab.hook.NPatchConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -119,11 +119,11 @@ class DeviceIdProvider : ContentProvider() {
 
             if (context != null) {
                 try {
-                    val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
+                    val prefs = context.getSharedPreferences(NPatchConfig.PREF_FILE, Context.MODE_PRIVATE)
                     prefs.edit()
-                        .putString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, activeAndroidTestId)
-                        .putString(NPatchHookEntry.KEY_ACTIVE_TELEPHONY_ID, activeTelephonyTestId)
-                        .putBoolean(NPatchHookEntry.KEY_INTERCEPTION_ENABLED, true)
+                        .putString(NPatchConfig.KEY_ACTIVE_ANDROID_ID, activeAndroidTestId)
+                        .putString(NPatchConfig.KEY_ACTIVE_TELEPHONY_ID, activeTelephonyTestId)
+                        .putBoolean(NPatchConfig.KEY_INTERCEPTION_ENABLED, true)
                         .apply()
                 } catch (t: Throwable) {
                     Log.w(TAG, "Failed to persist to prefs: ${t.message}")
@@ -143,13 +143,13 @@ class DeviceIdProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         context?.let { ctx ->
             try {
-                val prefs = ctx.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
-                val savedAndroidId = prefs.getString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, null)
+                val prefs = ctx.getSharedPreferences(NPatchConfig.PREF_FILE, Context.MODE_PRIVATE)
+                val savedAndroidId = prefs.getString(NPatchConfig.KEY_ACTIVE_ANDROID_ID, null)
                 if (!savedAndroidId.isNullOrEmpty()) {
                     activeAndroidTestId = savedAndroidId
                     _currentAndroidTestIdFlow.value = savedAndroidId
                 }
-                val savedTelephonyId = prefs.getString(NPatchHookEntry.KEY_ACTIVE_TELEPHONY_ID, null)
+                val savedTelephonyId = prefs.getString(NPatchConfig.KEY_ACTIVE_TELEPHONY_ID, null)
                 if (!savedTelephonyId.isNullOrEmpty()) {
                     activeTelephonyTestId = savedTelephonyId
                     _currentTelephonyTestIdFlow.value = savedTelephonyId

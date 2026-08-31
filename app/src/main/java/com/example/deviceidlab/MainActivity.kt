@@ -96,7 +96,7 @@ import com.example.deviceidlab.database.AppDatabase
 import com.example.deviceidlab.demo.DeviceIdHookDemo
 import com.example.deviceidlab.demo.HookInvocationLog
 import com.example.deviceidlab.demo.InterceptionBridge
-import com.example.deviceidlab.hook.NPatchHookEntry
+import com.example.deviceidlab.hook.NPatchConfig
 import com.example.deviceidlab.model.DeviceIdentity
 import com.example.ui.theme.DeviceIdLabTheme
 import kotlinx.coroutines.launch
@@ -827,9 +827,9 @@ fun NpatchInjectionTestCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "MODULE STATUS:        ${if (NPatchHookEntry.isXposedEnvironmentActive || isFrameworkHookActive) "ACTIVE (Runtime Loaded)" else "INACTIVE / STANDALONE"}",
+                        text = "MODULE STATUS:        ${if (NPatchConfig.isXposedEnvironmentActive || isFrameworkHookActive) "ACTIVE (Runtime Loaded)" else "INACTIVE / STANDALONE"}",
                         fontFamily = FontFamily.Monospace,
-                        color = if (NPatchHookEntry.isXposedEnvironmentActive || isFrameworkHookActive) TagGreen else CodeText,
+                        color = if (NPatchConfig.isXposedEnvironmentActive || isFrameworkHookActive) TagGreen else CodeText,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )

@@ -9,7 +9,7 @@ import android.util.Log
 import com.example.deviceidlab.demo.DeviceIdHookDemo
 import com.example.deviceidlab.demo.InterceptionBridge
 import com.example.deviceidlab.hook.NPatchAuditManager
-import com.example.deviceidlab.hook.NPatchHookEntry
+import com.example.deviceidlab.hook.NPatchConfig
 
 /**
  * Result model representing device identifier queries from official Android APIs.
@@ -159,8 +159,8 @@ object DeviceIdReader {
         if (providerId.isNotBlank() && providerId != "NPATCH_ANDROID_001" && providerId != "NPATCH_TEST_001") return providerId
 
         return try {
-            val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
-            val saved = prefs.getString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, null)
+            val prefs = context.getSharedPreferences(NPatchConfig.PREF_FILE, Context.MODE_PRIVATE)
+            val saved = prefs.getString(NPatchConfig.KEY_ACTIVE_ANDROID_ID, null)
             if (!saved.isNullOrEmpty()) saved else (InterceptionBridge.activeSimulatedAndroidId.value ?: providerId)
         } catch (_: Throwable) {
             InterceptionBridge.activeSimulatedAndroidId.value ?: providerId
@@ -175,8 +175,8 @@ object DeviceIdReader {
         if (providerId.isNotBlank() && providerId != "NPATCH_TELEPHONY_001") return providerId
 
         return try {
-            val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
-            val saved = prefs.getString(NPatchHookEntry.KEY_ACTIVE_TELEPHONY_ID, null)
+            val prefs = context.getSharedPreferences(NPatchConfig.PREF_FILE, Context.MODE_PRIVATE)
+            val saved = prefs.getString(NPatchConfig.KEY_ACTIVE_TELEPHONY_ID, null)
             if (!saved.isNullOrEmpty()) saved else (InterceptionBridge.activeSimulatedTelephonyId.value ?: providerId)
         } catch (_: Throwable) {
             InterceptionBridge.activeSimulatedTelephonyId.value ?: providerId
@@ -190,11 +190,11 @@ object DeviceIdReader {
     fun saveInjectedIds(context: Context, androidId: String, telephonyId: String) {
         com.example.deviceidlab.provider.DeviceIdProvider.updateTestIds(context, androidId, telephonyId)
         try {
-            val prefs = context.getSharedPreferences(NPatchHookEntry.PREF_FILE, Context.MODE_PRIVATE)
+            val prefs = context.getSharedPreferences(NPatchConfig.PREF_FILE, Context.MODE_PRIVATE)
             prefs.edit()
-                .putString(NPatchHookEntry.KEY_ACTIVE_ANDROID_ID, androidId)
-                .putString(NPatchHookEntry.KEY_ACTIVE_TELEPHONY_ID, telephonyId)
-                .putBoolean(NPatchHookEntry.KEY_INTERCEPTION_ENABLED, true)
+                .putString(NPatchConfig.KEY_ACTIVE_ANDROID_ID, androidId)
+                .putString(NPatchConfig.KEY_ACTIVE_TELEPHONY_ID, telephonyId)
+                .putBoolean(NPatchConfig.KEY_INTERCEPTION_ENABLED, true)
                 .commit()
         } catch (_: Throwable) {}
         InterceptionBridge.updateActiveSimulatedIds(androidId, telephonyId)

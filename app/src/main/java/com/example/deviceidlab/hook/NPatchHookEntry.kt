@@ -49,6 +49,7 @@ class NPatchHookEntry : IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam?) {
         isXposedEnvironmentActive = true
+        NPatchConfig.isXposedEnvironmentActive = true
         val msg = "[NPATCH] Runtime loaded in Zygote (path=${startupParam?.modulePath})"
         Log.i(TAG, msg)
         XposedBridge.log(msg)

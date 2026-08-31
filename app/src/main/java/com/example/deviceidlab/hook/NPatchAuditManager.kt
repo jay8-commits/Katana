@@ -3,7 +3,6 @@ package com.example.deviceidlab.hook
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
-import de.robv.android.xposed.XposedBridge
 
 /**
  * Audit record holding concrete proof of runtime hook execution in the target process.
@@ -128,7 +127,7 @@ object NPatchAuditManager {
         val savedTargetPkg = prefs?.getString(KEY_TARGET_PACKAGE, null) ?: inMemoryAudit?.targetPackage ?: "None"
         val savedTargetProc = prefs?.getString(KEY_TARGET_PROCESS, null) ?: inMemoryAudit?.targetProcess ?: "None"
         val savedTargetPid = prefs?.getInt(KEY_TARGET_PID, 0) ?: inMemoryAudit?.targetPid ?: 0
-        val savedHookEntry = prefs?.getString(KEY_HOOK_ENTRY_STATUS, null) ?: inMemoryAudit?.hookEntryStatus ?: if (NPatchHookEntry.isXposedEnvironmentActive) "INITIALIZED" else "NOT RUN"
+        val savedHookEntry = prefs?.getString(KEY_HOOK_ENTRY_STATUS, null) ?: inMemoryAudit?.hookEntryStatus ?: if (NPatchConfig.isXposedEnvironmentActive) "INITIALIZED" else "NOT RUN"
         val savedHookInstall = prefs?.getString(KEY_HOOK_INSTALL_STATUS, null) ?: inMemoryAudit?.hookInstallationStatus ?: if (canaryActive) "INSTALLED" else "NOT INSTALLED"
         val savedTimestamp = prefs?.getLong(KEY_LAST_HOOK_TIMESTAMP, 0L) ?: inMemoryAudit?.lastHookTimestamp ?: 0L
         val savedOrigId = prefs?.getString(KEY_ORIGINAL_ID, "") ?: inMemoryAudit?.originalAndroidId ?: ""
@@ -147,7 +146,7 @@ object NPatchAuditManager {
         val isVerified = canaryActive || (hasSavedRecord && isTargetMatched && savedTimestamp > 0L)
 
         return NPatchAuditRecord(
-            moduleDetected = canaryActive || hasSavedRecord || NPatchHookEntry.isXposedEnvironmentActive,
+            moduleDetected = canaryActive || hasSavedRecord || NPatchConfig.isXposedEnvironmentActive,
             targetPackage = if (savedTargetPkg != "None") savedTargetPkg else expectedTargetPackage,
             targetProcess = if (savedTargetProc != "None") savedTargetProc else if (canaryActive) "current_process" else "None",
             targetPid = savedTargetPid,
