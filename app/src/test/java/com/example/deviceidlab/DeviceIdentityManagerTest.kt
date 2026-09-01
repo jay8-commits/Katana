@@ -254,6 +254,50 @@ class DeviceIdentityManagerTest {
         assertNotEquals(profileB.computeFingerprint(), profileC.computeFingerprint())
     }
 
+    @Test
+    fun testProfileSerializationRoundTrip() {
+        val manager = DeviceIdentityManager(mockContext)
+        val original = DeviceProfile(
+            id = "test_profile_serialize_123",
+            name = "Serialized Test Profile",
+            androidId = "0123456789abcdef",
+            imei = "867530900000001",
+            serialNumber = "SER123456789",
+            macAddress = "02:00:00:11:22:33",
+            buildModel = "Pixel 7",
+            buildManufacturer = "Google",
+            buildBrand = "google",
+            buildProduct = "panther",
+            buildDevice = "panther",
+            buildFingerprint = "google/panther/panther:13/TQ3A.230901.001/10750709:user/release-keys",
+            createdAt = 1700000000000L,
+            state = ProfileState.CONSUMED,
+            consumedAt = 1700000005000L
+        )
+
+        val json = manager.serializeProfile(original)
+        assertTrue(json.contains("\"id\":\"test_profile_serialize_123\""))
+        assertTrue(json.contains("\"state\":\"CONSUMED\""))
+
+        val parsed = manager.parseProfile(json)
+        assertEquals(original.id, parsed.id)
+        assertEquals(original.name, parsed.name)
+        assertEquals(original.androidId, parsed.androidId)
+        assertEquals(original.imei, parsed.imei)
+        assertEquals(original.serialNumber, parsed.serialNumber)
+        assertEquals(original.macAddress, parsed.macAddress)
+        assertEquals(original.buildModel, parsed.buildModel)
+        assertEquals(original.buildManufacturer, parsed.buildManufacturer)
+        assertEquals(original.buildBrand, parsed.buildBrand)
+        assertEquals(original.buildProduct, parsed.buildProduct)
+        assertEquals(original.buildDevice, parsed.buildDevice)
+        assertEquals(original.buildFingerprint, parsed.buildFingerprint)
+        assertEquals(original.createdAt, parsed.createdAt)
+        assertEquals(original.state, parsed.state)
+        assertEquals(original.consumedAt, parsed.consumedAt)
+        assertEquals(original.computeFingerprint(), parsed.computeFingerprint())
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // IN-MEMORY MOCKS FOR UNIT TESTING WITHOUT ANDROID RUNTIME FRAMEWORK
     // ──────────────────────────────────────────────────────────────────────────
