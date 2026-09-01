@@ -390,31 +390,27 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         try {
             val telephonyManagerClass = XposedHelpers.findClass("android.telephony.TelephonyManager", lpparam.classLoader)
 
-            // 1. getDeviceId()
+            // 1. getDeviceId() & getDeviceId(int)
             hookTelephonyMethod(telephonyManagerClass, "getDeviceId", lpparam.packageName, NPatchConfig.KEY_IMEI)
-
-            // 2. getDeviceId(int)
             hookTelephonySlotMethod(telephonyManagerClass, "getDeviceId", lpparam.packageName, NPatchConfig.KEY_IMEI)
 
-            // 3. getImei()
+            // 2. getImei() & getImei(int)
             hookTelephonyMethod(telephonyManagerClass, "getImei", lpparam.packageName, NPatchConfig.KEY_IMEI)
-
-            // 4. getImei(int)
             hookTelephonySlotMethod(telephonyManagerClass, "getImei", lpparam.packageName, NPatchConfig.KEY_IMEI)
 
-            // 5. getMeid()
+            // 3. getMeid() & getMeid(int)
             hookTelephonyMethod(telephonyManagerClass, "getMeid", lpparam.packageName, NPatchConfig.KEY_IMEI)
-
-            // 6. getMeid(int)
             hookTelephonySlotMethod(telephonyManagerClass, "getMeid", lpparam.packageName, NPatchConfig.KEY_IMEI)
 
-            // 7. getSimSerialNumber()
+            // 4. getSimSerialNumber() & getSimSerialNumber(int)
             hookTelephonyMethod(telephonyManagerClass, "getSimSerialNumber", lpparam.packageName, NPatchConfig.KEY_SERIAL)
+            hookTelephonySlotMethod(telephonyManagerClass, "getSimSerialNumber", lpparam.packageName, NPatchConfig.KEY_SERIAL)
 
-            // 8. getSubscriberId()
+            // 5. getSubscriberId() & getSubscriberId(int)
             hookTelephonyMethod(telephonyManagerClass, "getSubscriberId", lpparam.packageName, NPatchConfig.KEY_IMEI)
+            hookTelephonySlotMethod(telephonyManagerClass, "getSubscriberId", lpparam.packageName, NPatchConfig.KEY_IMEI)
 
-            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager (8 methods & slot overloads)")
+            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager (10 methods & slot overloads)")
         } catch (e: Throwable) {
             log("TelephonyManager hooks skipped: ${e.message}")
         }
@@ -426,27 +422,45 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 clazz,
                 methodName,
                 object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
                         if (isHookExecuting.get() == true) return
                         try {
                             isHookExecuting.set(true)
                             log("EVENT: API_INVOCATION_INTERCEPTED | API: TelephonyManager.$methodName() | Target: $targetPackage")
-                            val originalVal = param.result as? String
                             val spoofedVal = queryIpcValue(null, configKey)
                             if (!spoofedVal.isNullOrEmpty()) {
-                                log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: $configKey | Val: ${TestApiCatalog.maskValue(spoofedVal)}")
                                 param.result = spoofedVal
-                                log("EVENT: VALUE_REPLACED | API: TelephonyManager.$methodName() | Target: $targetPackage | Orig: ${TestApiCatalog.maskValue(originalVal)} | Replaced: ${TestApiCatalog.maskValue(spoofedVal)}")
+                                log("EVENT: VALUE_REPLACED | API: TelephonyManager.$methodName() | Target: $targetPackage | Replaced: ${TestApiCatalog.maskValue(spoofedVal)}")
                             } else {
                                 log("EVENT: PROFILE_LOOKUP_FAILED | Key: $configKey")
                             }
+                        } catch (e: Throwable) {
+                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: $methodName | Error: ${e.message}")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            val spoofedVal = queryIpcValue(null, configKey)
+                            if (!spoofedVal.isNullOrEmpty()) {
+                                param.throwable = null
+                                param.result = spoofedVal
+                            }
+                        } catch (_: Throwable) {
                         } finally {
                             isHookExecuting.set(false)
                         }
                     }
                 }
             )
-        } catch (_: Throwable) {}
+            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager.$methodName()")
+        } catch (e: Throwable) {
+            log("Hook TelephonyManager.$methodName skipped: ${e.message}")
+        }
     }
 
     private fun hookTelephonySlotMethod(clazz: Class<*>, methodName: String, targetPackage: String, configKey: String) {
@@ -456,28 +470,46 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 methodName,
                 java.lang.Integer.TYPE,
                 object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
                         if (isHookExecuting.get() == true) return
                         try {
                             isHookExecuting.set(true)
                             val slot = param.args[0] as? Int ?: 0
                             log("EVENT: API_INVOCATION_INTERCEPTED | API: TelephonyManager.$methodName($slot) | Target: $targetPackage")
-                            val originalVal = param.result as? String
                             val spoofedVal = queryIpcValue(null, configKey)
                             if (!spoofedVal.isNullOrEmpty()) {
-                                log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: $configKey | Val: ${TestApiCatalog.maskValue(spoofedVal)}")
                                 param.result = spoofedVal
-                                log("EVENT: VALUE_REPLACED | API: TelephonyManager.$methodName($slot) | Target: $targetPackage | Orig: ${TestApiCatalog.maskValue(originalVal)} | Replaced: ${TestApiCatalog.maskValue(spoofedVal)}")
+                                log("EVENT: VALUE_REPLACED | API: TelephonyManager.$methodName($slot) | Target: $targetPackage | Replaced: ${TestApiCatalog.maskValue(spoofedVal)}")
                             } else {
                                 log("EVENT: PROFILE_LOOKUP_FAILED | Key: $configKey")
                             }
+                        } catch (e: Throwable) {
+                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: $methodName($slot) | Error: ${e.message}")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            val spoofedVal = queryIpcValue(null, configKey)
+                            if (!spoofedVal.isNullOrEmpty()) {
+                                param.throwable = null
+                                param.result = spoofedVal
+                            }
+                        } catch (_: Throwable) {
                         } finally {
                             isHookExecuting.set(false)
                         }
                     }
                 }
             )
-        } catch (_: Throwable) {}
+            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager.$methodName(int)")
+        } catch (e: Throwable) {
+            log("Hook TelephonyManager.$methodName(int) skipped: ${e.message}")
+        }
     }
 
     // -------------------------------------------------------------------------
