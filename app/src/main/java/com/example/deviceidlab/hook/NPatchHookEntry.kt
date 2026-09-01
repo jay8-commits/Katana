@@ -472,9 +472,9 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         if (isHookExecuting.get() == true) return
+                        val slot = (param.args.getOrNull(0) as? Int) ?: 0
                         try {
                             isHookExecuting.set(true)
-                            val slot = param.args[0] as? Int ?: 0
                             log("EVENT: API_INVOCATION_INTERCEPTED | API: TelephonyManager.$methodName($slot) | Target: $targetPackage")
                             val spoofedVal = queryIpcValue(null, configKey)
                             if (!spoofedVal.isNullOrEmpty()) {

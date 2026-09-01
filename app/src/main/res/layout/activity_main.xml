@@ -23,7 +23,7 @@
             android:id="@+id/tvArchitectureNote"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Architecture: Single Patch → Single Install → Dynamic Switching\nThis controller stores profiles and serves them via DeviceIdProvider. Target Apps #1 &amp; #2 independently invoke Android framework APIs to verify interception."
+            android:text="Architecture: Single Patch → Single Install → Dynamic Switching\nPersistent One-Time-Use Lifecycle: AVAILABLE → CONSUMED / EXEMPTED\nConsumed profiles are permanently excluded from future selection."
             android:textSize="12sp"
             android:textColor="#64748B"
             android:layout_marginBottom="16dp" />
@@ -33,7 +33,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Status: Ready"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#0F766E"
             android:layout_marginBottom="12dp" />
@@ -42,10 +42,20 @@
             android:id="@+id/tvActiveProfileHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Active Profile Information (Served via IPC)"
+            android:text="Active Profile &amp; Lifecycle Diagnostics"
             android:textStyle="bold"
             android:textSize="14sp"
             android:layout_marginBottom="6dp" />
+
+        <TextView
+            android:id="@+id/tvProfileLifecycle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:textColor="#0369A1"
+            android:text="Profile ID: -\nState: -\nFingerprint: -\nCreated: -\nConsumed: -"
+            android:layout_marginBottom="8dp" />
 
         <TextView
             android:id="@+id/tvAndroidId"
@@ -86,21 +96,21 @@
             android:id="@+id/btnGenerateProfile1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Set Profile #1 (Pixel 7 / Tensor G2)"
+            android:text="Activate Profile #1 (Pixel 7 / Tensor G2)"
             android:layout_marginBottom="8dp" />
 
         <Button
             android:id="@+id/btnGenerateProfile2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Set Profile #2 (Galaxy S23 / Snapdragon 8 Gen 2)"
+            android:text="Activate Profile #2 (Galaxy S23 / Snapdragon 8 Gen 2)"
             android:layout_marginBottom="8dp" />
 
         <Button
             android:id="@+id/btnGenerateRandom"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Generate Fully Randomized Profile"
+            android:text="Generate &amp; Activate Fresh Available Profile"
             android:layout_marginBottom="16dp" />
 
         <TextView

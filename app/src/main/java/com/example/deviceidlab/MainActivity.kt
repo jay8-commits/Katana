@@ -4,10 +4,13 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.example.deviceidlab.generator.RandomIdGenerator
 import com.example.deviceidlab.hook.TestApiCatalog
 import com.example.deviceidlab.manager.DeviceIdentityManager
 import com.example.deviceidlab.model.DeviceProfile
+import com.example.deviceidlab.model.ProfileState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,10 +21,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvMac: TextView
     private lateinit var tvModel: TextView
     private lateinit var tvStatus: TextView
+    private lateinit var tvProfileLifecycle: TextView
     private lateinit var tvCatalogList: TextView
     private lateinit var btnGenerateProfile1: Button
     private lateinit var btnGenerateProfile2: Button
     private lateinit var btnGenerateRandom: Button
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +41,7 @@ class MainActivity : AppCompatActivity() {
         tvMac = findViewById(R.id.tvMac)
         tvModel = findViewById(R.id.tvModel)
         tvStatus = findViewById(R.id.tvStatus)
+        tvProfileLifecycle = findViewById(R.id.tvProfileLifecycle)
         tvCatalogList = findViewById(R.id.tvCatalogList)
 
         btnGenerateProfile1 = findViewById(R.id.btnGenerateProfile1)
@@ -57,11 +64,11 @@ class MainActivity : AppCompatActivity() {
                 buildBrand = "google",
                 buildProduct = "panther",
                 buildDevice = "panther",
-                buildFingerprint = "google/panther/panther:13/TQ3A.230901.001/10750709:user/release-keys"
+                buildFingerprint = "google/panther/panther:13/TQ3A.230901.001/10750709:user/release-keys",
+                state = ProfileState.AVAILABLE
             )
-            identityManager.saveActiveProfile(p1)
-            renderCurrentIdentity()
-            tvStatus.text = "Active: Profile #1 (Pixel 7). Target apps will observe this upon read/restart."
+            val result = identityManager.applyAndActivateProfile(p1)
+            handleActivationResult(result)
         }
 
         btnGenerateProfile2.setOnClickListener {
@@ -77,23 +84,43 @@ class MainActivity : AppCompatActivity() {
                 buildBrand = "samsung",
                 buildProduct = "dm1qxxx",
                 buildDevice = "dm1q",
-                buildFingerprint = "samsung/dm1qxxx/dm1q:14/UP1A.231005.007/S911BXXU3BWJM:user/release-keys"
+                buildFingerprint = "samsung/dm1qxxx/dm1q:14/UP1A.231005.007/S911BXXU3BWJM:user/release-keys",
+                state = ProfileState.AVAILABLE
             )
-            identityManager.saveActiveProfile(p2)
-            renderCurrentIdentity()
-            tvStatus.text = "Active: Profile #2 (Galaxy S23). Switched dynamically without repatching."
+            val result = identityManager.applyAndActivateProfile(p2)
+            handleActivationResult(result)
         }
 
         btnGenerateRandom.setOnClickListener {
-            val newProfile = RandomIdGenerator.generateProfile("Random Profile ${System.currentTimeMillis() % 1000}")
-            identityManager.saveActiveProfile(newProfile)
-            renderCurrentIdentity()
-            tvStatus.text = "Active: ${newProfile.name} (Randomized)."
+            val freshProfile = identityManager.generateAvailableProfile("Randomized Profile")
+            val result = identityManager.applyAndActivateProfile(freshProfile)
+            handleActivationResult(result)
+        }
+    }
+
+    private fun handleActivationResult(result: com.example.deviceidlab.model.ProfileActivationResult) {
+        renderCurrentIdentity()
+        if (result.success) {
+            tvStatus.text = "${result.message}\n(Total consumed/exempted: ${identityManager.getConsumedCount()})"
+        } else {
+            tvStatus.text = "ACTIVATION REJECTED: ${result.message}\nReason: ${result.rejectionReason ?: "UNKNOWN"}"
         }
     }
 
     private fun renderCurrentIdentity() {
         val profile = identityManager.getActiveProfile()
+        val createdStr = dateFormat.format(Date(profile.createdAt))
+        val consumedStr = if (profile.consumedAt != null) dateFormat.format(Date(profile.consumedAt)) else "NOT_CONSUMED"
+        val fingerprint = profile.computeFingerprint().take(12) + "..."
+
+        tvProfileLifecycle.text = StringBuilder()
+            .append("Profile ID: ${profile.id}\n")
+            .append("Profile State: ${profile.state}\n")
+            .append("Fingerprint: $fingerprint\n")
+            .append("Created: $createdStr\n")
+            .append("Activated/Consumed: $consumedStr")
+            .toString()
+
         tvAndroidId.text = "Android ID: ${profile.androidId} [Masked: ${TestApiCatalog.maskValue(profile.androidId)}]"
         tvImei.text = "IMEI: ${profile.imei} [Masked: ${TestApiCatalog.maskValue(profile.imei)}]"
         tvSerial.text = "Serial: ${profile.serialNumber} [Masked: ${TestApiCatalog.maskValue(profile.serialNumber)}]"

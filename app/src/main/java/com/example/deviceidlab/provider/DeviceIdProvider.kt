@@ -37,7 +37,9 @@ class DeviceIdProvider : ContentProvider() {
         val columns = arrayOf(
             "androidId", "imei", "serialNumber", "macAddress",
             "buildModel", "buildManufacturer", "buildBrand",
-            "buildProduct", "buildDevice", "buildFingerprint"
+            "buildProduct", "buildDevice", "buildFingerprint",
+            "profileId", "profileName", "profileFingerprint", "profileState",
+            "createdAt", "consumedAt", "activationResult", "consumptionResult"
         )
         val cursor = MatrixCursor(columns)
         cursor.addRow(
@@ -51,7 +53,15 @@ class DeviceIdProvider : ContentProvider() {
                 profile.buildBrand,
                 profile.buildProduct,
                 profile.buildDevice,
-                profile.buildFingerprint
+                profile.buildFingerprint,
+                profile.id,
+                profile.name,
+                profile.computeFingerprint(),
+                profile.state.name,
+                profile.createdAt.toString(),
+                (profile.consumedAt ?: 0L).toString(),
+                "SUCCESS",
+                if (profile.state.name == "CONSUMED") "CONSUMED_AND_EXEMPTED" else "AVAILABLE"
             )
         )
         return cursor

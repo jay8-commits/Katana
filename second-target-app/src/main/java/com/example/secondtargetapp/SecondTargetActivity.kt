@@ -64,7 +64,24 @@ class SecondTargetActivity : AppCompatActivity() {
         val pid = Process.myPid()
         val expectedProfile = queryActiveProfileFromProvider()
 
+        val profileId = expectedProfile["profileId"] ?: "unknown_profile"
+        val profileFingerprint = expectedProfile["profileFingerprint"] ?: "unknown_fp"
+        val profileState = expectedProfile["profileState"] ?: "CONSUMED"
+        val activationResult = expectedProfile["activationResult"] ?: "SUCCESS"
+        val consumptionResult = expectedProfile["consumptionResult"] ?: "CONSUMED_AND_EXEMPTED"
+
         val sb = StringBuilder()
+        sb.append("╔═════════════════════════════════════════════════╗\n")
+        sb.append("║  ACTIVE PROFILE LIFECYCLE & RUNTIME CORRELATION ║\n")
+        sb.append("╠═════════════════════════════════════════════════╣\n")
+        sb.append("PROFILE ID          : $profileId\n")
+        sb.append("PROFILE FINGERPRINT : ${profileFingerprint.take(16)}...\n")
+        sb.append("PROFILE STATE       : $profileState\n")
+        sb.append("ACTIVATION RESULT   : $activationResult\n")
+        sb.append("CONSUMPTION RESULT  : $consumptionResult\n")
+        sb.append("TARGET PACKAGE      : $processName (PID: $pid)\n")
+        sb.append("╚═════════════════════════════════════════════════╝\n\n")
+
         var passCount = 0
         var platformRestrictedCount = 0
         var totalCount = 0
@@ -76,7 +93,10 @@ class SecondTargetActivity : AppCompatActivity() {
             actualValue: String?,
             expectedValue: String?,
             isPlatformRestricted: Boolean = false,
-            restrictedReason: String = ""
+            restrictedReason: String = "",
+            stageOriginalObtained: String = "OBSERVED_AT_CALL_SITE",
+            stageHookIntercepted: String = "REGISTERED_IN_XPODED_FRAMEWORK",
+            stageReplacementSelected: String = "PROFILE_KEY_BOUND"
         ): String {
             totalCount++
             val isPass = (expectedValue != null && actualValue != null && actualValue == expectedValue)
@@ -99,7 +119,7 @@ class SecondTargetActivity : AppCompatActivity() {
             }
 
             val diagnosis = when {
-                isPass -> "TARGET_OBSERVED_GENERATED_VALUE (Method invoked -> Hook intercepted -> Profile value returned & verified)"
+                isPass -> "TARGET_OBSERVED_GENERATED_VALUE (Method invoked -> Hook intercepted -> Profile replacement returned & verified)"
                 isPlatformRestricted && actualValue == null -> "PLATFORM_RESTRICTED / REPLACEMENT_FAILED ($restrictedReason)"
                 actualValue == null -> "REPLACEMENT_FAILED (Method invoked -> Observed null / Exception; hook did not replace)"
                 expectedValue == null -> "PROFILE_LOOKUP_FAILED (Controller provider unreachable or profile value empty)"
@@ -107,17 +127,29 @@ class SecondTargetActivity : AppCompatActivity() {
             }
 
             sb.append("═════════════════════════════════════════════════\n")
-            sb.append("API: $apiName\n")
+            sb.append("PROFILE ID: $profileId\n")
+            sb.append("PROFILE FINGERPRINT: ${profileFingerprint.take(12)}...\n")
+            sb.append("PROFILE STATE: $profileState\n")
+            sb.append("ACTIVATION RESULT: $activationResult\n")
+            sb.append("CONSUMPTION RESULT: $consumptionResult\n")
+            sb.append("TARGET PACKAGE: $processName (PID: $pid)\n")
+            sb.append("API NAME: $apiName\n")
             sb.append("METHOD/FIELD: $targetMethod\n")
             sb.append("HOOK EVENT: $hookEvent\n")
-            sb.append("TARGET PROCESS: $processName (PID: $pid)\n")
-            sb.append("EXPECTED PROFILE VALUE (MASKED): ${mask(expectedValue)}\n")
-            sb.append("ACTUAL OBSERVED VALUE  (MASKED): ${mask(actualValue)}\n")
-            sb.append("VALUE MATCH: $match\n")
+            sb.append("── 5-STAGE CHAIN VERIFICATION ───────────────────\n")
+            sb.append("1. REAL/INVOKED API STATE  : $stageOriginalObtained\n")
+            sb.append("2. HOOK INTERCEPTION      : $stageHookIntercepted\n")
+            sb.append("3. REPLACEMENT SELECTED   : $stageReplacementSelected -> ${mask(expectedValue)}\n")
+            sb.append("4. FINAL OBSERVED VALUE   : ${mask(actualValue)}\n")
+            sb.append("5. REPLACEMENT MATCH      : $match\n")
+            sb.append("─────────────────────────────────────────────────\n")
+            sb.append("EXPECTED PROFILE VALUE: ${mask(expectedValue)}\n")
+            sb.append("FINAL OBSERVED VALUE: ${mask(actualValue)}\n")
+            sb.append("REPLACEMENT MATCH: $match\n")
             sb.append("RESULT STATUS: $status\n")
             sb.append("DIAGNOSIS: $diagnosis\n")
 
-            Log.d(TAG, "EVENT: TARGET_VERIFICATION_RESULT | API: $apiName | Status: $status | Target: $processName | Val: ${mask(actualValue)}")
+            Log.d(TAG, "EVENT: TARGET_VERIFICATION_RESULT | API: $apiName | Profile: $profileId | Status: $status | Target: $processName | Val: ${mask(actualValue)}")
             return status
         }
 
@@ -263,150 +295,294 @@ class SecondTargetActivity : AppCompatActivity() {
             restrictedReason = "Requires READ_PRIVILEGED_PHONE_STATE on API 28+"
         )
 
-        // 11. TelephonyManager.getDeviceId() & getDeviceId(0)
-        var readDeviceId: String? = null
-        var isDeviceIdRestricted = false
-        var deviceIdRestrictedReason = ""
+        // 11. TelephonyManager.getDeviceId() (0-arg)
+        var readDeviceId0: String? = null
+        var isDeviceId0Restricted = false
+        var deviceId0RestrictedReason = ""
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
                 @Suppress("DEPRECATION")
-                readDeviceId = tm.deviceId
+                readDeviceId0 = tm.deviceId
             }
         } catch (e: SecurityException) {
-            isDeviceIdRestricted = true
-            deviceIdRestrictedReason = "SecurityException: ${e.message}"
+            isDeviceId0Restricted = true
+            deviceId0RestrictedReason = "SecurityException: ${e.message}"
         } catch (e: Throwable) {
-            isDeviceIdRestricted = true
-            deviceIdRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+            isDeviceId0Restricted = true
+            deviceId0RestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
         }
         auditItem(
             apiName = "11. TelephonyManager.getDeviceId()",
             targetMethod = "TelephonyManager.getDeviceId()",
-            hookEvent = "TelephonyManager.getDeviceId() / (int)",
-            actualValue = readDeviceId,
+            hookEvent = "TelephonyManager.getDeviceId()",
+            actualValue = readDeviceId0,
             expectedValue = expectedProfile["imei"],
-            isPlatformRestricted = isDeviceIdRestricted && readDeviceId == null,
-            restrictedReason = deviceIdRestrictedReason
+            isPlatformRestricted = isDeviceId0Restricted && readDeviceId0 == null,
+            restrictedReason = deviceId0RestrictedReason
         )
 
-        // 12. TelephonyManager.getImei() & getImei(0)
-        var readImei: String? = null
-        var isImeiRestricted = false
-        var imeiRestrictedReason = ""
+        // 12. TelephonyManager.getDeviceId(int slotIndex)
+        var readDeviceIdSlot: String? = null
+        var isDeviceIdSlotRestricted = false
+        var deviceIdSlotRestrictedReason = ""
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            if (tm != null) {
+                @Suppress("DEPRECATION")
+                val method = TelephonyManager::class.java.getMethod("getDeviceId", Int::class.javaPrimitiveType)
+                readDeviceIdSlot = method.invoke(tm, 0) as? String
+            }
+        } catch (e: SecurityException) {
+            isDeviceIdSlotRestricted = true
+            deviceIdSlotRestrictedReason = "SecurityException: ${e.message}"
+        } catch (e: Throwable) {
+            isDeviceIdSlotRestricted = true
+            deviceIdSlotRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+        }
+        auditItem(
+            apiName = "12. TelephonyManager.getDeviceId(int)",
+            targetMethod = "TelephonyManager.getDeviceId(int slotIndex=0)",
+            hookEvent = "TelephonyManager.getDeviceId(int)",
+            actualValue = readDeviceIdSlot,
+            expectedValue = expectedProfile["imei"],
+            isPlatformRestricted = isDeviceIdSlotRestricted && readDeviceIdSlot == null,
+            restrictedReason = deviceIdSlotRestrictedReason
+        )
+
+        // 13. TelephonyManager.getImei() (0-arg)
+        var readImei0: String? = null
+        var isImei0Restricted = false
+        var imei0RestrictedReason = ""
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    readImei = tm.imei
+                    readImei0 = tm.imei
                 } else {
                     @Suppress("DEPRECATION")
-                    readImei = tm.deviceId
+                    readImei0 = tm.deviceId
                 }
             }
         } catch (e: SecurityException) {
-            isImeiRestricted = true
-            imeiRestrictedReason = "SecurityException: ${e.message}"
+            isImei0Restricted = true
+            imei0RestrictedReason = "SecurityException: ${e.message}"
         } catch (e: Throwable) {
-            isImeiRestricted = true
-            imeiRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+            isImei0Restricted = true
+            imei0RestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
         }
         auditItem(
-            apiName = "12. TelephonyManager.getImei()",
+            apiName = "13. TelephonyManager.getImei()",
             targetMethod = "TelephonyManager.getImei()",
-            hookEvent = "TelephonyManager.getImei() / (int)",
-            actualValue = readImei,
+            hookEvent = "TelephonyManager.getImei()",
+            actualValue = readImei0,
             expectedValue = expectedProfile["imei"],
-            isPlatformRestricted = isImeiRestricted && readImei == null,
-            restrictedReason = imeiRestrictedReason
+            isPlatformRestricted = isImei0Restricted && readImei0 == null,
+            restrictedReason = imei0RestrictedReason
         )
 
-        // 13. TelephonyManager.getMeid()
-        var readMeid: String? = null
-        var isMeidRestricted = false
-        var meidRestrictedReason = ""
+        // 14. TelephonyManager.getImei(int slotIndex)
+        var readImeiSlot: String? = null
+        var isImeiSlotRestricted = false
+        var imeiSlotRestrictedReason = ""
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    readMeid = tm.meid
+                    readImeiSlot = tm.getImei(0)
                 } else {
-                    @Suppress("DEPRECATION")
-                    readMeid = tm.deviceId
+                    val method = TelephonyManager::class.java.getMethod("getDeviceId", Int::class.javaPrimitiveType)
+                    readImeiSlot = method.invoke(tm, 0) as? String
                 }
             }
         } catch (e: SecurityException) {
-            isMeidRestricted = true
-            meidRestrictedReason = "SecurityException: ${e.message}"
+            isImeiSlotRestricted = true
+            imeiSlotRestrictedReason = "SecurityException: ${e.message}"
         } catch (e: Throwable) {
-            isMeidRestricted = true
-            meidRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+            isImeiSlotRestricted = true
+            imeiSlotRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
         }
         auditItem(
-            apiName = "13. TelephonyManager.getMeid()",
+            apiName = "14. TelephonyManager.getImei(int)",
+            targetMethod = "TelephonyManager.getImei(int slotIndex=0)",
+            hookEvent = "TelephonyManager.getImei(int)",
+            actualValue = readImeiSlot,
+            expectedValue = expectedProfile["imei"],
+            isPlatformRestricted = isImeiSlotRestricted && readImeiSlot == null,
+            restrictedReason = imeiSlotRestrictedReason
+        )
+
+        // 15. TelephonyManager.getMeid() (0-arg)
+        var readMeid0: String? = null
+        var isMeid0Restricted = false
+        var meid0RestrictedReason = ""
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            if (tm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    readMeid0 = tm.meid
+                } else {
+                    @Suppress("DEPRECATION")
+                    readMeid0 = tm.deviceId
+                }
+            }
+        } catch (e: SecurityException) {
+            isMeid0Restricted = true
+            meid0RestrictedReason = "SecurityException: ${e.message}"
+        } catch (e: Throwable) {
+            isMeid0Restricted = true
+            meid0RestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+        }
+        auditItem(
+            apiName = "15. TelephonyManager.getMeid()",
             targetMethod = "TelephonyManager.getMeid()",
-            hookEvent = "TelephonyManager.getMeid() / (int)",
-            actualValue = readMeid,
+            hookEvent = "TelephonyManager.getMeid()",
+            actualValue = readMeid0,
             expectedValue = expectedProfile["imei"],
-            isPlatformRestricted = isMeidRestricted && readMeid == null,
-            restrictedReason = meidRestrictedReason
+            isPlatformRestricted = isMeid0Restricted && readMeid0 == null,
+            restrictedReason = meid0RestrictedReason
         )
 
-        // 14. TelephonyManager.getSimSerialNumber()
-        var readIccid: String? = null
-        var isIccidRestricted = false
-        var iccidRestrictedReason = ""
+        // 16. TelephonyManager.getMeid(int slotIndex)
+        var readMeidSlot: String? = null
+        var isMeidSlotRestricted = false
+        var meidSlotRestrictedReason = ""
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            if (tm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    readMeidSlot = tm.getMeid(0)
+                } else {
+                    val method = TelephonyManager::class.java.getMethod("getDeviceId", Int::class.javaPrimitiveType)
+                    readMeidSlot = method.invoke(tm, 0) as? String
+                }
+            }
+        } catch (e: SecurityException) {
+            isMeidSlotRestricted = true
+            meidSlotRestrictedReason = "SecurityException: ${e.message}"
+        } catch (e: Throwable) {
+            isMeidSlotRestricted = true
+            meidSlotRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+        }
+        auditItem(
+            apiName = "16. TelephonyManager.getMeid(int)",
+            targetMethod = "TelephonyManager.getMeid(int slotIndex=0)",
+            hookEvent = "TelephonyManager.getMeid(int)",
+            actualValue = readMeidSlot,
+            expectedValue = expectedProfile["imei"],
+            isPlatformRestricted = isMeidSlotRestricted && readMeidSlot == null,
+            restrictedReason = meidSlotRestrictedReason
+        )
+
+        // 17. TelephonyManager.getSimSerialNumber() (0-arg)
+        var readIccid0: String? = null
+        var isIccid0Restricted = false
+        var iccid0RestrictedReason = ""
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
                 @Suppress("DEPRECATION")
-                readIccid = tm.simSerialNumber
+                readIccid0 = tm.simSerialNumber
             }
         } catch (e: SecurityException) {
-            isIccidRestricted = true
-            iccidRestrictedReason = "SecurityException: ${e.message}"
+            isIccid0Restricted = true
+            iccid0RestrictedReason = "SecurityException: ${e.message}"
         } catch (e: Throwable) {
-            isIccidRestricted = true
-            iccidRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+            isIccid0Restricted = true
+            iccid0RestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
         }
         auditItem(
-            apiName = "14. TelephonyManager.getSimSerialNumber()",
+            apiName = "17. TelephonyManager.getSimSerialNumber()",
             targetMethod = "TelephonyManager.getSimSerialNumber()",
-            hookEvent = "TelephonyManager.getSimSerialNumber() / (int)",
-            actualValue = readIccid,
+            hookEvent = "TelephonyManager.getSimSerialNumber()",
+            actualValue = readIccid0,
             expectedValue = expectedProfile["serialNumber"],
-            isPlatformRestricted = isIccidRestricted && readIccid == null,
-            restrictedReason = iccidRestrictedReason
+            isPlatformRestricted = isIccid0Restricted && readIccid0 == null,
+            restrictedReason = iccid0RestrictedReason
         )
 
-        // 15. TelephonyManager.getSubscriberId()
-        var readImsi: String? = null
-        var isImsiRestricted = false
-        var imsiRestrictedReason = ""
+        // 18. TelephonyManager.getSimSerialNumber(int subId)
+        var readIccidSub: String? = null
+        var isIccidSubRestricted = false
+        var iccidSubRestrictedReason = ""
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            if (tm != null) {
+                val method = TelephonyManager::class.java.getMethod("getSimSerialNumber", Int::class.javaPrimitiveType)
+                readIccidSub = method.invoke(tm, 1) as? String
+            }
+        } catch (e: SecurityException) {
+            isIccidSubRestricted = true
+            iccidSubRestrictedReason = "SecurityException: ${e.message}"
+        } catch (e: Throwable) {
+            isIccidSubRestricted = true
+            iccidSubRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+        }
+        auditItem(
+            apiName = "18. TelephonyManager.getSimSerialNumber(int)",
+            targetMethod = "TelephonyManager.getSimSerialNumber(int subId=1)",
+            hookEvent = "TelephonyManager.getSimSerialNumber(int)",
+            actualValue = readIccidSub,
+            expectedValue = expectedProfile["serialNumber"],
+            isPlatformRestricted = isIccidSubRestricted && readIccidSub == null,
+            restrictedReason = iccidSubRestrictedReason
+        )
+
+        // 19. TelephonyManager.getSubscriberId() (0-arg)
+        var readImsi0: String? = null
+        var isImsi0Restricted = false
+        var imsi0RestrictedReason = ""
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
                 @Suppress("DEPRECATION")
-                readImsi = tm.subscriberId
+                readImsi0 = tm.subscriberId
             }
         } catch (e: SecurityException) {
-            isImsiRestricted = true
-            imsiRestrictedReason = "SecurityException: ${e.message}"
+            isImsi0Restricted = true
+            imsi0RestrictedReason = "SecurityException: ${e.message}"
         } catch (e: Throwable) {
-            isImsiRestricted = true
-            imsiRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+            isImsi0Restricted = true
+            imsi0RestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
         }
         auditItem(
-            apiName = "15. TelephonyManager.getSubscriberId()",
+            apiName = "19. TelephonyManager.getSubscriberId()",
             targetMethod = "TelephonyManager.getSubscriberId()",
-            hookEvent = "TelephonyManager.getSubscriberId() / (int)",
-            actualValue = readImsi,
+            hookEvent = "TelephonyManager.getSubscriberId()",
+            actualValue = readImsi0,
             expectedValue = expectedProfile["imei"],
-            isPlatformRestricted = isImsiRestricted && readImsi == null,
-            restrictedReason = imsiRestrictedReason
+            isPlatformRestricted = isImsi0Restricted && readImsi0 == null,
+            restrictedReason = imsi0RestrictedReason
         )
 
-        // 16. WifiInfo.getMacAddress()
+        // 20. TelephonyManager.getSubscriberId(int subId)
+        var readImsiSub: String? = null
+        var isImsiSubRestricted = false
+        var imsiSubRestrictedReason = ""
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            if (tm != null) {
+                val method = TelephonyManager::class.java.getMethod("getSubscriberId", Int::class.javaPrimitiveType)
+                readImsiSub = method.invoke(tm, 1) as? String
+            }
+        } catch (e: SecurityException) {
+            isImsiSubRestricted = true
+            imsiSubRestrictedReason = "SecurityException: ${e.message}"
+        } catch (e: Throwable) {
+            isImsiSubRestricted = true
+            imsiSubRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
+        }
+        auditItem(
+            apiName = "20. TelephonyManager.getSubscriberId(int)",
+            targetMethod = "TelephonyManager.getSubscriberId(int subId=1)",
+            hookEvent = "TelephonyManager.getSubscriberId(int)",
+            actualValue = readImsiSub,
+            expectedValue = expectedProfile["imei"],
+            isPlatformRestricted = isImsiSubRestricted && readImsiSub == null,
+            restrictedReason = imsiSubRestrictedReason
+        )
+
+        // 21. WifiInfo.getMacAddress()
         var readMac: String? = null
         var isMacRestricted = false
         try {
@@ -416,7 +592,7 @@ class SecondTargetActivity : AppCompatActivity() {
             isMacRestricted = true
         }
         auditItem(
-            apiName = "16. WifiInfo.getMacAddress()",
+            apiName = "21. WifiInfo.getMacAddress()",
             targetMethod = "WifiInfo.getMacAddress()",
             hookEvent = "WifiInfo.getMacAddress()",
             actualValue = readMac,
