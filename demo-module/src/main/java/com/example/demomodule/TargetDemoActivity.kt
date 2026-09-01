@@ -91,7 +91,8 @@ class TargetDemoActivity : AppCompatActivity() {
             val status = when {
                 isPass -> "PASS"
                 isPlatformRestricted -> "PLATFORM_RESTRICTED"
-                expectedValue == null -> "PROFILE_LOOKUP_FAILED"
+                actualValue == null -> "NOT_OBSERVED"
+                expectedValue == null -> "FAIL"
                 else -> "FAIL"
             }
 
@@ -99,6 +100,14 @@ class TargetDemoActivity : AppCompatActivity() {
                 isPlatformRestricted -> "RESTRICTED (N/A)"
                 isPass -> "YES"
                 else -> "NO"
+            }
+
+            val diagnosis = when {
+                isPass -> "GENERATED_VALUE_OBSERVED (Hook intercepted and target received generated profile value)"
+                isPlatformRestricted -> "PLATFORM_RESTRICTED ($restrictedReason)"
+                actualValue == null -> "NOT_OBSERVED (API returned null or was not observed during runtime invocation)"
+                expectedValue == null -> "PROFILE_LOOKUP_FAILED (Controller provider unreachable or profile value empty)"
+                else -> "ORIGINAL_VALUE_OBSERVED (Target read real device value; hook replacement mismatch)"
             }
 
             sb.append("═════════════════════════════════════════════════\n")
@@ -109,11 +118,8 @@ class TargetDemoActivity : AppCompatActivity() {
             sb.append("EXPECTED PROFILE VALUE (MASKED): ${mask(expectedValue)}\n")
             sb.append("ACTUAL OBSERVED VALUE  (MASKED): ${mask(actualValue)}\n")
             sb.append("VALUE MATCH: $match\n")
-            sb.append("RESULT STATUS: $status")
-            if (isPlatformRestricted && restrictedReason.isNotEmpty()) {
-                sb.append(" ($restrictedReason)")
-            }
-            sb.append("\n")
+            sb.append("RESULT STATUS: $status\n")
+            sb.append("DIAGNOSIS: $diagnosis\n")
 
             Log.d(TAG, "EVENT: TARGET_VERIFICATION_RESULT | API: $apiName | Status: $status | Target: $processName | Val: ${mask(actualValue)}")
             return status
