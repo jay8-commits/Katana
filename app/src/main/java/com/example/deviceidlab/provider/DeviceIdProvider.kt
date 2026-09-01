@@ -5,16 +5,21 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.util.Log
 import com.example.deviceidlab.manager.DeviceIdentityManager
 
 class DeviceIdProvider : ContentProvider() {
 
     companion object {
+        private const val TAG = "DeviceIdProvider"
         const val AUTHORITY = "com.example.deviceidlab.provider.deviceid"
         val CONTENT_URI: Uri = Uri.parse("content://$AUTHORITY/profile")
     }
 
-    override fun onCreate(): Boolean = true
+    override fun onCreate(): Boolean {
+        Log.d(TAG, "DeviceIdProvider initialized")
+        return true
+    }
 
     override fun query(
         uri: Uri,
@@ -26,6 +31,8 @@ class DeviceIdProvider : ContentProvider() {
         val ctx = context ?: return MatrixCursor(emptyArray())
         val manager = DeviceIdentityManager(ctx)
         val profile = manager.getActiveProfile()
+
+        Log.d(TAG, "IPC Query received for URI: $uri, returning profile: ${profile.name}, Android ID: ${profile.androidId}")
 
         val columns = arrayOf(
             "androidId", "imei", "serialNumber", "macAddress",

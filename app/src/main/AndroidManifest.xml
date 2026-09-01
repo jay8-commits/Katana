@@ -38,7 +38,7 @@
             android:name=".provider.DeviceIdProvider"
             android:authorities="com.example.deviceidlab.provider.deviceid"
             android:exported="true"
-            android:multiprocess="true" />
+            android:multiprocess="false" />
 
     </application>
 
