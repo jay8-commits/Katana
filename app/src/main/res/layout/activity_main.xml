@@ -1,65 +1,124 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/tvStatus"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Status: Ready"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp" />
-
-    <TextView
-        android:id="@+id/tvAndroidId"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Android ID: -"
-        android:layout_marginBottom="8dp" />
-
-    <TextView
-        android:id="@+id/tvImei"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="IMEI: -"
-        android:layout_marginBottom="8dp" />
-
-    <TextView
-        android:id="@+id/tvSerial"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Serial: -"
-        android:layout_marginBottom="8dp" />
-
-    <TextView
-        android:id="@+id/tvModel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Model: -"
-        android:layout_marginBottom="16dp" />
-
-    <Button
-        android:id="@+id/btnGenerate"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Generate New Profile"
-        android:layout_marginBottom="8dp" />
+        android:orientation="vertical"
+        android:padding="16dp">
 
-    <Button
-        android:id="@+id/btnApply"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Apply Profile"
-        android:layout_marginBottom="8dp" />
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Device Identity Controller &amp; Provider"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#1E293B"
+            android:layout_marginBottom="8dp" />
 
-    <Button
-        android:id="@+id/btnVerifyId"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="READ / VERIFY ID" />
+        <TextView
+            android:id="@+id/tvArchitectureNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Architecture: Single Patch → Single Install → Dynamic Switching\nThis controller stores profiles and serves them via DeviceIdProvider. Target Apps #1 &amp; #2 independently invoke Android framework APIs to verify interception."
+            android:textSize="12sp"
+            android:textColor="#64748B"
+            android:layout_marginBottom="16dp" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Status: Ready"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#0F766E"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:id="@+id/tvActiveProfileHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Active Profile Information (Served via IPC)"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginBottom="6dp" />
+
+        <TextView
+            android:id="@+id/tvAndroidId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Android ID: -"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvImei"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="IMEI: -"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvSerial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Serial: -"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvMac"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="MAC: -"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvModel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Model: -"
+            android:layout_marginBottom="16dp" />
+
+        <Button
+            android:id="@+id/btnGenerateProfile1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Set Profile #1 (Pixel 7 / Tensor G2)"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnGenerateProfile2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Set Profile #2 (Galaxy S23 / Snapdragon 8 Gen 2)"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnGenerateRandom"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Generate Fully Randomized Profile"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tvCatalogTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Registered Identity APIs (16 Total):"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginBottom="6dp" />
+
+        <TextView
+            android:id="@+id/tvCatalogList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:textColor="#334155" />
+
+    </LinearLayout>
+</ScrollView>
