@@ -89,7 +89,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 String::class.java,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get()) return
+                        if (isHookExecuting.get() == true) return
                         val key = param.args[1] as? String ?: return
                         if (Settings.Secure.ANDROID_ID == key) {
                             try {
@@ -124,7 +124,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                     java.lang.Integer.TYPE,
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
-                            if (isHookExecuting.get()) return
+                            if (isHookExecuting.get() == true) return
                             val key = param.args[1] as? String ?: return
                             if (Settings.Secure.ANDROID_ID == key) {
                                 try {
@@ -173,7 +173,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                     "getSerial",
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
-                            if (isHookExecuting.get()) return
+                            if (isHookExecuting.get() == true) return
                             try {
                                 isHookExecuting.set(true)
                                 log("EVENT: API_INVOCATION_INTERCEPTED | API: Build.getSerial() | Target: ${lpparam.packageName}")
@@ -294,7 +294,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 methodName,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get()) return
+                        if (isHookExecuting.get() == true) return
                         try {
                             isHookExecuting.set(true)
                             log("EVENT: API_INVOCATION_INTERCEPTED | API: TelephonyManager.$methodName() | Target: $targetPackage")
@@ -324,7 +324,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 java.lang.Integer.TYPE,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get()) return
+                        if (isHookExecuting.get() == true) return
                         try {
                             isHookExecuting.set(true)
                             val slot = param.args[0] as? Int ?: 0
@@ -358,7 +358,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 "getMacAddress",
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get()) return
+                        if (isHookExecuting.get() == true) return
                         try {
                             isHookExecuting.set(true)
                             log("EVENT: API_INVOCATION_INTERCEPTED | API: WifiInfo.getMacAddress() | Target: ${lpparam.packageName}")

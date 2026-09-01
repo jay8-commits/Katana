@@ -316,7 +316,7 @@ class SecondTargetActivity : AppCompatActivity() {
         var isMeidRestricted = false
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-            if (tm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION_INT < Build.VERSION_CODES.Q) {
+            if (tm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 readMeid = tm.meid
             } else {
                 isMeidRestricted = true
