@@ -163,55 +163,12 @@ export const NpatchInjectionCard: React.FC<NpatchInjectionCardProps> = ({
         </div>
       </div>
 
-      {/* Dynamic Runtime Architecture Info Banner */}
+      {/* Universal Injection & Dynamic Runtime Architecture Info Banner */}
       <div className="rounded-xl bg-sky-950/40 border border-sky-800/40 p-3.5 flex items-start gap-3 text-xs text-sky-200">
         <Layers className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
         <div>
-          <span className="font-bold text-sky-300">Single-patch architecture: </span>
-          Target APK is patched once. All new test IDs (Android ID & Telephony Device ID) update at runtime via ContentProvider IPC without repatching or reinstalling the application.
-        </div>
-      </div>
-
-      {/* Target Package Selection */}
-      <div className="space-y-2">
-        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-          Target Package Scope
-        </label>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <input
-            id="target-package-input"
-            type="text"
-            value={targetPackage}
-            onChange={(e) => setTargetPackage(e.target.value)}
-            placeholder="e.g. com.example.deviceidlab"
-            className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono focus:outline-none focus:border-sky-500"
-          />
-
-          {/* Quick Target Chips */}
-          <div className="flex items-center gap-1.5">
-            <button
-              id="chip-target-self"
-              onClick={() => setTargetPackage('com.example.deviceidlab')}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                targetPackage === 'com.example.deviceidlab'
-                  ? 'bg-sky-500/20 border-sky-500 text-sky-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Self (DeviceIdLab)
-            </button>
-            <button
-              id="chip-target-demo"
-              onClick={() => setTargetPackage('com.example.targetdemo')}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                targetPackage === 'com.example.targetdemo'
-                  ? 'bg-sky-500/20 border-sky-500 text-sky-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              com.example.targetdemo
-            </button>
-          </div>
+          <span className="font-bold text-sky-300">Universal Single-Patch Architecture: </span>
+          The NPatch module operates globally across all eligible application processes. Dynamic profiles update at runtime via ContentProvider IPC without repatching, reinstalling, or restricting to hardcoded package scopes.
         </div>
       </div>
 
@@ -303,10 +260,10 @@ export const NpatchInjectionCard: React.FC<NpatchInjectionCardProps> = ({
           className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-200 text-xs font-bold border border-indigo-500/40 transition-all shadow-sm"
         >
           <Play className="w-3.5 h-3.5 text-indigo-400" />
-          <span>LAUNCH TARGET</span>
+          <span>LAUNCH DEMO</span>
         </button>
 
-        {/* Test ID Injection */}
+        {/* Read / Verify ID Action */}
         <button
           id="test-id-injection-btn"
           onClick={handleTestInjection}
@@ -314,7 +271,7 @@ export const NpatchInjectionCard: React.FC<NpatchInjectionCardProps> = ({
           className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-md transition-all disabled:opacity-50"
         >
           <Bug className="w-3.5 h-3.5" />
-          <span>{isTesting ? 'TESTING...' : 'TEST ID INJECTION'}</span>
+          <span>{isTesting ? 'VERIFYING...' : 'READ / VERIFY ID'}</span>
         </button>
       </div>
 

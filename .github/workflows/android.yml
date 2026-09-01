@@ -30,6 +30,25 @@ jobs:
     - name: Build Debug APKs
       run: ./gradlew assembleDebug
 
+    - name: Verify APKs Exist (Fail If Missing)
+      run: |
+        echo "=== Verifying Generated APK Files ==="
+        find . -type f -name "*.apk" -print
+        
+        if [ ! -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "::error::Controller APK not found at app/build/outputs/apk/debug/app-debug.apk"
+          exit 1
+        fi
+        
+        if [ ! -f "demo-module/build/outputs/apk/debug/demo-module-debug.apk" ]; then
+          echo "::error::Target Demo APK not found at demo-module/build/outputs/apk/debug/demo-module-debug.apk"
+          exit 1
+        fi
+        
+        echo "Controller APK size: $(ls -lh app/build/outputs/apk/debug/app-debug.apk | awk '{print $5}')"
+        echo "Demo module APK size: $(ls -lh demo-module/build/outputs/apk/debug/demo-module-debug.apk | awk '{print $5}')"
+        echo "Both APKs exist and verified."
+
     - name: Upload Controller APK Artifact
       uses: actions/upload-artifact@v4
       with:

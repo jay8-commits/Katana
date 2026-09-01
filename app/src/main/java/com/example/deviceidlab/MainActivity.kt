@@ -17,6 +17,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var btnGenerate: Button
     private lateinit var btnApply: Button
+    private lateinit var btnVerifyId: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +32,7 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         btnGenerate = findViewById(R.id.btnGenerate)
         btnApply = findViewById(R.id.btnApply)
+        btnVerifyId = findViewById(R.id.btnVerifyId)
 
         renderCurrentIdentity()
 
@@ -44,6 +46,11 @@ class MainActivity : AppCompatActivity() {
         btnApply.setOnClickListener {
             renderCurrentIdentity()
             tvStatus.text = "Profile active. Target apps will read this identity via IPC."
+        }
+
+        btnVerifyId.setOnClickListener {
+            val current = DeviceIdReader.readCurrentIdentity(this)
+            tvStatus.text = "Current Host OS Identity Read:\nAndroid ID: ${current.androidId}\nModel: ${current.model} (${current.manufacturer})\nNote: Injected target processes read spoofed ID via NPatch hook."
         }
     }
 
