@@ -7,43 +7,59 @@
     android:padding="24dp">
 
     <TextView
-        android:id="@+id/tvTargetTitle"
+        android:id="@+id/tvSecondTargetTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Target App #1 (Verification)"
-        android:textSize="22sp"
+        android:text="Second Target Consumer App"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
     <TextView
-        android:id="@+id/tvTargetAndroidId"
+        android:id="@+id/tvSecondTargetPkg"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Target #1 Read ANDROID_ID:\n-"
+        android:text="Package: com.example.secondtargetapp"
+        android:textSize="14sp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:id="@+id/tvSecondTargetAndroidId"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Target #2 Read ANDROID_ID:\n-"
         android:textSize="18sp"
         android:textAlignment="center"
         android:layout_marginBottom="12dp" />
 
     <TextView
-        android:id="@+id/tvTargetBuildModel"
+        android:id="@+id/tvSecondTargetModel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Build Model: -"
+        android:text="Model: -"
         android:textSize="16sp"
         android:layout_marginBottom="12dp" />
 
     <TextView
-        android:id="@+id/tvTargetSerial"
+        android:id="@+id/tvSecondTargetFingerprint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Serial: -"
-        android:textSize="16sp"
+        android:text="Fingerprint: -"
+        android:textSize="14sp"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/tvSecondTargetTelephony"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Telephony: -"
+        android:textSize="14sp"
         android:layout_marginBottom="24dp" />
 
     <Button
-        android:id="@+id/btnRefresh"
+        android:id="@+id/btnSecondRefresh"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Refresh Identifiers" />
+        android:text="Refresh Target #2 Identifiers" />
 
 </LinearLayout>

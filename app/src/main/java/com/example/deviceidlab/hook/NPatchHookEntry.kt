@@ -2,6 +2,8 @@ package com.example.deviceidlab.hook
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.net.wifi.WifiInfo
+import android.os.Build
 import android.provider.Settings
 import android.telephony.TelephonyManager
 import android.util.Log
@@ -11,30 +13,50 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
+/**
+ * Generalized NPatch / LSPosed Hook Entry Point.
+ *
+ * Intercepts supported Android Device Information and Identity APIs
+ * dynamically for any authorized target application across processes.
+ *
+ * Supported API inventory:
+ * 1. Settings.Secure.getString(ContentResolver, String) -> ANDROID_ID
+ * 2. Settings.Secure.getStringForUser(ContentResolver, String, int) -> ANDROID_ID
+ * 3. Build fields (MODEL, MANUFACTURER, BRAND, PRODUCT, DEVICE, FINGERPRINT, SERIAL)
+ * 4. Build.getSerial()
+ * 5. TelephonyManager (getDeviceId, getDeviceId(int), getImei, getImei(int), getMeid, getMeid(int), getSimSerialNumber, getSubscriberId)
+ * 6. WifiInfo.getMacAddress()
+ */
 class NPatchHookEntry : IXposedHookLoadPackage {
 
     companion object {
         private const val TAG = "NPatch"
+        private const val CONTROLLER_PACKAGE = "com.example.deviceidlab"
     }
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        // Skip self (the controller module)
-        if (lpparam.packageName == "com.example.deviceidlab") {
+        // Exclude the controller module itself from being hooked
+        if (lpparam.packageName == CONTROLLER_PACKAGE) {
             return
         }
 
         log("Target package detected: ${lpparam.packageName}, process: ${lpparam.processName}")
         log("NPatchHookEntry loaded successfully in target process ${lpparam.processName}")
 
-        installSettingsSecureHooks(lpparam.classLoader)
-        installTelephonyHooks(lpparam.classLoader)
+        installSettingsSecureHooks(lpparam)
+        installBuildHooks(lpparam)
+        installTelephonyHooks(lpparam)
+        installWifiHooks(lpparam)
     }
 
-    private fun installSettingsSecureHooks(classLoader: ClassLoader) {
+    // -------------------------------------------------------------------------
+    // 1. Settings.Secure Hooks (ANDROID_ID)
+    // -------------------------------------------------------------------------
+    private fun installSettingsSecureHooks(lpparam: LoadPackageParam) {
         try {
-            val settingsSecureClass = XposedHelpers.findClass("android.provider.Settings\$Secure", classLoader)
+            val settingsSecureClass = XposedHelpers.findClass("android.provider.Settings\$Secure", lpparam.classLoader)
 
-            // 1. Hook Settings.Secure.getString(ContentResolver, String)
+            // Settings.Secure.getString(ContentResolver, String)
             XposedHelpers.findAndHookMethod(
                 settingsSecureClass,
                 "getString",
@@ -42,24 +64,21 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 String::class.java,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val name = param.args[1] as? String ?: return
-                        if (Settings.Secure.ANDROID_ID == name) {
+                        val key = param.args[1] as? String ?: return
+                        if (Settings.Secure.ANDROID_ID == key) {
                             val originalVal = param.result as? String
                             val cr = param.args[0] as? ContentResolver
-                            log("Intercepted Settings.Secure.getString for ANDROID_ID (original: $originalVal)")
                             val spoofedId = queryIpcValue(cr, NPatchConfig.KEY_ANDROID_ID)
+                            log("API: Settings.Secure.getString(ANDROID_ID) | Target: ${lpparam.packageName} | Original: $originalVal | Replaced: $spoofedId")
                             if (!spoofedId.isNullOrEmpty()) {
-                                log("Replaced ANDROID_ID with generated profile: $spoofedId")
                                 param.result = spoofedId
-                            } else {
-                                log("Warning: queryIpcValue returned empty or null for ANDROID_ID")
                             }
                         }
                     }
                 }
             )
 
-            // 2. Hook Settings.Secure.getStringForUser(ContentResolver, String, int)
+            // Settings.Secure.getStringForUser(ContentResolver, String, int)
             try {
                 XposedHelpers.findAndHookMethod(
                     settingsSecureClass,
@@ -69,14 +88,13 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                     java.lang.Integer.TYPE,
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
-                            val name = param.args[1] as? String ?: return
-                            if (Settings.Secure.ANDROID_ID == name) {
+                            val key = param.args[1] as? String ?: return
+                            if (Settings.Secure.ANDROID_ID == key) {
                                 val originalVal = param.result as? String
                                 val cr = param.args[0] as? ContentResolver
-                                log("Intercepted Settings.Secure.getStringForUser for ANDROID_ID (original: $originalVal)")
                                 val spoofedId = queryIpcValue(cr, NPatchConfig.KEY_ANDROID_ID)
+                                log("API: Settings.Secure.getStringForUser(ANDROID_ID) | Target: ${lpparam.packageName} | Original: $originalVal | Replaced: $spoofedId")
                                 if (!spoofedId.isNullOrEmpty()) {
-                                    log("Replaced ANDROID_ID (forUser) with generated profile: $spoofedId")
                                     param.result = spoofedId
                                 }
                             }
@@ -84,40 +102,195 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                     }
                 )
             } catch (e: Throwable) {
-                log("getStringForUser hook skipped or not present on this API level: ${e.message}")
+                log("getStringForUser hook skipped: ${e.message}")
             }
 
-            log("Hook installed: Settings.Secure.getString & getStringForUser")
+            log("Hook installed successfully: Settings.Secure.getString & getStringForUser")
         } catch (e: Throwable) {
             log("Error installing Settings.Secure hooks: ${e.message}")
         }
     }
 
-    private fun installTelephonyHooks(classLoader: ClassLoader) {
+    // -------------------------------------------------------------------------
+    // 2. Build Information Hooks
+    // -------------------------------------------------------------------------
+    private fun installBuildHooks(lpparam: LoadPackageParam) {
         try {
-            val telephonyManagerClass = XposedHelpers.findClass("android.telephony.TelephonyManager", classLoader)
+            val buildClass = XposedHelpers.findClass("android.os.Build", lpparam.classLoader)
 
+            // Apply static field modifications if profile values are available
+            applyStaticBuildFields(buildClass)
+
+            // Hook Build.getSerial() (API 26+)
+            try {
+                XposedHelpers.findAndHookMethod(
+                    buildClass,
+                    "getSerial",
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            val originalVal = param.result as? String
+                            val spoofedSerial = queryIpcValue(null, NPatchConfig.KEY_SERIAL)
+                            log("API: Build.getSerial() | Target: ${lpparam.packageName} | Original: $originalVal | Replaced: $spoofedSerial")
+                            if (!spoofedSerial.isNullOrEmpty()) {
+                                param.result = spoofedSerial
+                            }
+                        }
+                    }
+                )
+            } catch (e: Throwable) {
+                log("Build.getSerial hook skipped: ${e.message}")
+            }
+
+            log("Hook installed successfully: android.os.Build")
+        } catch (e: Throwable) {
+            log("Error installing Build hooks: ${e.message}")
+        }
+    }
+
+    private fun applyStaticBuildFields(buildClass: Class<*>) {
+        try {
+            val model = queryIpcValue(null, NPatchConfig.KEY_BUILD_MODEL)
+            if (!model.isNullOrEmpty()) XposedHelpers.setStaticObjectField(buildClass, "MODEL", model)
+
+            val manufacturer = queryIpcValue(null, NPatchConfig.KEY_BUILD_MANUFACTURER)
+            if (!manufacturer.isNullOrEmpty()) XposedHelpers.setStaticObjectField(buildClass, "MANUFACTURER", manufacturer)
+
+            val brand = queryIpcValue(null, NPatchConfig.KEY_BUILD_BRAND)
+            if (!brand.isNullOrEmpty()) XposedHelpers.setStaticObjectField(buildClass, "BRAND", brand)
+
+            val product = queryIpcValue(null, NPatchConfig.KEY_BUILD_PRODUCT)
+            if (!product.isNullOrEmpty()) XposedHelpers.setStaticObjectField(buildClass, "PRODUCT", product)
+
+            val device = queryIpcValue(null, NPatchConfig.KEY_BUILD_DEVICE)
+            if (!device.isNullOrEmpty()) XposedHelpers.setStaticObjectField(buildClass, "DEVICE", device)
+
+            val fingerprint = queryIpcValue(null, NPatchConfig.KEY_BUILD_FINGERPRINT)
+            if (!fingerprint.isNullOrEmpty()) XposedHelpers.setStaticObjectField(buildClass, "FINGERPRINT", fingerprint)
+
+            val serial = queryIpcValue(null, NPatchConfig.KEY_SERIAL)
+            if (!serial.isNullOrEmpty()) {
+                @Suppress("DEPRECATION")
+                XposedHelpers.setStaticObjectField(buildClass, "SERIAL", serial)
+            }
+        } catch (e: Throwable) {
+            log("Static Build fields override skipped: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. TelephonyManager Hooks
+    // -------------------------------------------------------------------------
+    private fun installTelephonyHooks(lpparam: LoadPackageParam) {
+        try {
+            val telephonyManagerClass = XposedHelpers.findClass("android.telephony.TelephonyManager", lpparam.classLoader)
+
+            // getDeviceId()
+            hookTelephonyMethod(telephonyManagerClass, "getDeviceId", lpparam.packageName, NPatchConfig.KEY_IMEI)
+
+            // getDeviceId(int)
+            try {
+                XposedHelpers.findAndHookMethod(
+                    telephonyManagerClass,
+                    "getDeviceId",
+                    java.lang.Integer.TYPE,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            val originalVal = param.result as? String
+                            val spoofedImei = queryIpcValue(null, NPatchConfig.KEY_IMEI)
+                            log("API: TelephonyManager.getDeviceId(slot) | Target: ${lpparam.packageName} | Original: $originalVal | Replaced: $spoofedImei")
+                            if (!spoofedImei.isNullOrEmpty()) {
+                                param.result = spoofedImei
+                            }
+                        }
+                    }
+                )
+            } catch (_: Throwable) {}
+
+            // getImei()
+            hookTelephonyMethod(telephonyManagerClass, "getImei", lpparam.packageName, NPatchConfig.KEY_IMEI)
+
+            // getImei(int)
+            try {
+                XposedHelpers.findAndHookMethod(
+                    telephonyManagerClass,
+                    "getImei",
+                    java.lang.Integer.TYPE,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            val originalVal = param.result as? String
+                            val spoofedImei = queryIpcValue(null, NPatchConfig.KEY_IMEI)
+                            log("API: TelephonyManager.getImei(slot) | Target: ${lpparam.packageName} | Original: $originalVal | Replaced: $spoofedImei")
+                            if (!spoofedImei.isNullOrEmpty()) {
+                                param.result = spoofedImei
+                            }
+                        }
+                    }
+                )
+            } catch (_: Throwable) {}
+
+            // getMeid()
+            hookTelephonyMethod(telephonyManagerClass, "getMeid", lpparam.packageName, NPatchConfig.KEY_IMEI)
+
+            // getSimSerialNumber()
+            hookTelephonyMethod(telephonyManagerClass, "getSimSerialNumber", lpparam.packageName, NPatchConfig.KEY_SERIAL)
+
+            // getSubscriberId()
+            hookTelephonyMethod(telephonyManagerClass, "getSubscriberId", lpparam.packageName, NPatchConfig.KEY_IMEI)
+
+            log("Hook installed successfully: android.telephony.TelephonyManager")
+        } catch (e: Throwable) {
+            log("TelephonyManager hooks skipped: ${e.message}")
+        }
+    }
+
+    private fun hookTelephonyMethod(clazz: Class<*>, methodName: String, targetPackage: String, configKey: String) {
+        try {
             XposedHelpers.findAndHookMethod(
-                telephonyManagerClass,
-                "getDeviceId",
+                clazz,
+                methodName,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val originalVal = param.result as? String
-                        log("Intercepted TelephonyManager.getDeviceId (original: $originalVal)")
-                        val spoofedImei = queryIpcValue(null, NPatchConfig.KEY_IMEI)
-                        if (!spoofedImei.isNullOrEmpty()) {
-                            log("Replaced getDeviceId with generated IMEI: $spoofedImei")
-                            param.result = spoofedImei
+                        val spoofedVal = queryIpcValue(null, configKey)
+                        log("API: TelephonyManager.$methodName() | Target: $targetPackage | Original: $originalVal | Replaced: $spoofedVal")
+                        if (!spoofedVal.isNullOrEmpty()) {
+                            param.result = spoofedVal
                         }
                     }
                 }
             )
-            log("Hook installed: TelephonyManager.getDeviceId")
+        } catch (_: Throwable) {}
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. WifiInfo Hooks
+    // -------------------------------------------------------------------------
+    private fun installWifiHooks(lpparam: LoadPackageParam) {
+        try {
+            val wifiInfoClass = XposedHelpers.findClass("android.net.wifi.WifiInfo", lpparam.classLoader)
+            XposedHelpers.findAndHookMethod(
+                wifiInfoClass,
+                "getMacAddress",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val originalVal = param.result as? String
+                        val spoofedMac = queryIpcValue(null, NPatchConfig.KEY_MAC)
+                        log("API: WifiInfo.getMacAddress() | Target: ${lpparam.packageName} | Original: $originalVal | Replaced: $spoofedMac")
+                        if (!spoofedMac.isNullOrEmpty()) {
+                            param.result = spoofedMac
+                        }
+                    }
+                }
+            )
+            log("Hook installed successfully: android.net.wifi.WifiInfo")
         } catch (e: Throwable) {
-            log("TelephonyManager hook skipped: ${e.message}")
+            log("WifiInfo hook skipped: ${e.message}")
         }
     }
 
+    // -------------------------------------------------------------------------
+    // IPC Query Helper
+    // -------------------------------------------------------------------------
     private fun queryIpcValue(cr: ContentResolver?, key: String): String? {
         val resolver = cr ?: resolveContentResolver()
         if (resolver == null) {
@@ -132,10 +305,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                     if (idx >= 0) {
                         cursor.getString(idx)
                     } else null
-                } else {
-                    log("IPC Cursor empty for key $key")
-                    null
-                }
+                } else null
             }
         } catch (e: Throwable) {
             log("IPC Query exception for key $key: ${e.message}")

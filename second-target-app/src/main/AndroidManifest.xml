@@ -14,14 +14,13 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/demo_app_name"
+        android:label="@string/second_target_app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.DeviceIdRandomizationLab">
 
-        <!-- Target Test Application #1 -->
         <activity
-            android:name=".TargetDemoActivity"
+            android:name=".SecondTargetActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

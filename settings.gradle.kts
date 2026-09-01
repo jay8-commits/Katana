@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "DeviceIdRandomizationLab"
 include(":app")
 include(":demo-module")
+include(":second-target-app")
