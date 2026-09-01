@@ -1,10 +1,12 @@
 package com.example.deviceidlab.hook
 
+import android.app.Activity
 import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
 import android.net.wifi.WifiInfo
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import android.telephony.TelephonyManager
 import android.util.Log
@@ -40,6 +42,8 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         log("EVENT: TARGET_PROCESS_STARTED | Package: ${lpparam.packageName} | Process: ${lpparam.processName}")
 
         installApplicationStartupHooks(lpparam)
+        installActivityLifecycleHooks(lpparam)
+        installSystemPropertiesHooks(lpparam)
         installSettingsSecureHooks(lpparam)
         installBuildHooks(lpparam)
         installTelephonyHooks(lpparam)
@@ -47,7 +51,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
     }
 
     // -------------------------------------------------------------------------
-    // 0. Application Startup Hook (Ensures Context-backed static field setup)
+    // 0. Application Startup Hooks (Ensures Context-backed static field setup)
     // -------------------------------------------------------------------------
     private fun installApplicationStartupHooks(lpparam: LoadPackageParam) {
         try {
@@ -60,17 +64,125 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val ctx = param.args[0] as? Context ?: return
                         try {
-                            val buildClass = XposedHelpers.findClass("android.os.Build", lpparam.classLoader)
-                            applyStaticBuildFields(buildClass, ctx.contentResolver, lpparam.packageName)
+                            syncStaticBuildFields(ctx.contentResolver, lpparam.packageName)
                         } catch (e: Throwable) {
-                            log("Startup static field override skipped: ${e.message}")
+                            log("attachBaseContext static field override skipped: ${e.message}")
                         }
                     }
                 }
             )
-            log("EVENT: HOOK_REGISTERED | Hook: Application.attachBaseContext (Static Field Initializer)")
+            XposedHelpers.findAndHookMethod(
+                appClass,
+                "onCreate",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val app = param.thisObject as? Application ?: return
+                        try {
+                            syncStaticBuildFields(app.contentResolver, lpparam.packageName)
+                        } catch (e: Throwable) {
+                            log("Application.onCreate static field override skipped: ${e.message}")
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: Application lifecycle (Static Field Initializer)")
         } catch (e: Throwable) {
             log("Application startup hook skipped: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 0.1 Activity Lifecycle Hooks (Ensures UI views always observe active profile)
+    // -------------------------------------------------------------------------
+    private fun installActivityLifecycleHooks(lpparam: LoadPackageParam) {
+        try {
+            val activityClass = XposedHelpers.findClass("android.app.Activity", lpparam.classLoader)
+            XposedHelpers.findAndHookMethod(
+                activityClass,
+                "onCreate",
+                Bundle::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val activity = param.thisObject as? Activity ?: return
+                        try {
+                            syncStaticBuildFields(activity.contentResolver, lpparam.packageName)
+                        } catch (_: Throwable) {}
+                    }
+                }
+            )
+            XposedHelpers.findAndHookMethod(
+                activityClass,
+                "onResume",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val activity = param.thisObject as? Activity ?: return
+                        try {
+                            syncStaticBuildFields(activity.contentResolver, lpparam.packageName)
+                        } catch (_: Throwable) {}
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: Activity lifecycle (Dynamic Static Sync)")
+        } catch (e: Throwable) {
+            log("Activity lifecycle hook skipped: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 0.2 SystemProperties Hooks (Intercepts framework & native property queries)
+    // -------------------------------------------------------------------------
+    private fun installSystemPropertiesHooks(lpparam: LoadPackageParam) {
+        try {
+            val sysPropClass = XposedHelpers.findClass("android.os.SystemProperties", lpparam.classLoader)
+
+            XposedHelpers.findAndHookMethod(
+                sysPropClass,
+                "get",
+                String::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        val key = param.args[0] as? String ?: return
+                        val replacement = getSystemPropertyReplacement(key)
+                        if (replacement != null) {
+                            param.result = replacement
+                        }
+                    }
+                }
+            )
+
+            XposedHelpers.findAndHookMethod(
+                sysPropClass,
+                "get",
+                String::class.java,
+                String::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        val key = param.args[0] as? String ?: return
+                        val replacement = getSystemPropertyReplacement(key)
+                        if (replacement != null) {
+                            param.result = replacement
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: SystemProperties.get(String, [String])")
+        } catch (e: Throwable) {
+            log("SystemProperties hook skipped: ${e.message}")
+        }
+    }
+
+    private fun getSystemPropertyReplacement(key: String): String? {
+        return when {
+            key == "ro.product.model" || key.endsWith(".model") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_MODEL)
+            key == "ro.product.manufacturer" || key.endsWith(".manufacturer") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_MANUFACTURER)
+            key == "ro.product.brand" || key.endsWith(".brand") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_BRAND)
+            key == "ro.product.name" || key.endsWith(".name") || key == "ro.product.product.name" -> queryIpcValue(null, NPatchConfig.KEY_BUILD_PRODUCT)
+            key == "ro.product.device" || key.endsWith(".device") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_DEVICE)
+            key == "ro.build.fingerprint" || key.endsWith(".fingerprint") || key == "ro.bootimage.build.fingerprint" -> queryIpcValue(null, NPatchConfig.KEY_BUILD_FINGERPRINT)
+            key == "ro.serialno" || key == "ro.boot.serialno" || key == "no.such.thing" -> queryIpcValue(null, NPatchConfig.KEY_SERIAL)
+            else -> null
         }
     }
 
@@ -92,11 +204,11 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                         if (isHookExecuting.get() == true) return
                         val key = param.args[1] as? String ?: return
                         if (Settings.Secure.ANDROID_ID == key) {
+                            val cr = param.args[0] as? ContentResolver
                             try {
                                 isHookExecuting.set(true)
                                 log("EVENT: API_INVOCATION_INTERCEPTED | API: Settings.Secure.getString(ANDROID_ID) | Target: ${lpparam.packageName}")
                                 val originalVal = param.result as? String
-                                val cr = param.args[0] as? ContentResolver
                                 val spoofedId = queryIpcValue(cr, NPatchConfig.KEY_ANDROID_ID)
                                 if (!spoofedId.isNullOrEmpty()) {
                                     log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: androidId | Val: ${TestApiCatalog.maskValue(spoofedId)}")
@@ -108,6 +220,8 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                             } finally {
                                 isHookExecuting.set(false)
                             }
+                            // Proactively synchronize Build static fields with active ContentResolver
+                            syncStaticBuildFields(cr, lpparam.packageName)
                         }
                     }
                 }
@@ -127,11 +241,11 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                             if (isHookExecuting.get() == true) return
                             val key = param.args[1] as? String ?: return
                             if (Settings.Secure.ANDROID_ID == key) {
+                                val cr = param.args[0] as? ContentResolver
                                 try {
                                     isHookExecuting.set(true)
                                     log("EVENT: API_INVOCATION_INTERCEPTED | API: Settings.Secure.getStringForUser(ANDROID_ID) | Target: ${lpparam.packageName}")
                                     val originalVal = param.result as? String
-                                    val cr = param.args[0] as? ContentResolver
                                     val spoofedId = queryIpcValue(cr, NPatchConfig.KEY_ANDROID_ID)
                                     if (!spoofedId.isNullOrEmpty()) {
                                         log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: androidId | Val: ${TestApiCatalog.maskValue(spoofedId)}")
@@ -143,6 +257,7 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                                 } finally {
                                     isHookExecuting.set(false)
                                 }
+                                syncStaticBuildFields(cr, lpparam.packageName)
                             }
                         }
                     }
@@ -163,8 +278,8 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         try {
             val buildClass = XposedHelpers.findClass("android.os.Build", lpparam.classLoader)
 
-            // Initial early static override attempt
-            applyStaticBuildFields(buildClass, null, lpparam.packageName)
+            // Initial static override attempt
+            syncStaticBuildFields(null, lpparam.packageName)
 
             // Hook Build.getSerial() (API 26+)
             try {
@@ -201,52 +316,70 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         }
     }
 
-    private fun applyStaticBuildFields(buildClass: Class<*>, cr: ContentResolver?, packageName: String) {
+    private fun setStaticFieldReliably(clazz: Class<*>, fieldName: String, value: Any?) {
         try {
+            val field = clazz.getDeclaredField(fieldName)
+            field.isAccessible = true
+            field.set(null, value)
+        } catch (_: Throwable) {
+            try {
+                XposedHelpers.setStaticObjectField(clazz, fieldName, value)
+            } catch (_: Throwable) {}
+        }
+    }
+
+    private fun syncStaticBuildFields(cr: ContentResolver?, packageName: String) {
+        if (isHookExecuting.get() == true) return
+        try {
+            isHookExecuting.set(true)
+            val buildClass = Build::class.java
+
             val model = queryIpcValue(cr, NPatchConfig.KEY_BUILD_MODEL)
             if (!model.isNullOrEmpty()) {
-                XposedHelpers.setStaticObjectField(buildClass, "MODEL", model)
+                setStaticFieldReliably(buildClass, "MODEL", model)
                 log("EVENT: VALUE_REPLACED | API: Build.MODEL (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(model)}")
             }
 
             val manufacturer = queryIpcValue(cr, NPatchConfig.KEY_BUILD_MANUFACTURER)
             if (!manufacturer.isNullOrEmpty()) {
-                XposedHelpers.setStaticObjectField(buildClass, "MANUFACTURER", manufacturer)
+                setStaticFieldReliably(buildClass, "MANUFACTURER", manufacturer)
                 log("EVENT: VALUE_REPLACED | API: Build.MANUFACTURER (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(manufacturer)}")
             }
 
             val brand = queryIpcValue(cr, NPatchConfig.KEY_BUILD_BRAND)
             if (!brand.isNullOrEmpty()) {
-                XposedHelpers.setStaticObjectField(buildClass, "BRAND", brand)
+                setStaticFieldReliably(buildClass, "BRAND", brand)
                 log("EVENT: VALUE_REPLACED | API: Build.BRAND (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(brand)}")
             }
 
             val product = queryIpcValue(cr, NPatchConfig.KEY_BUILD_PRODUCT)
             if (!product.isNullOrEmpty()) {
-                XposedHelpers.setStaticObjectField(buildClass, "PRODUCT", product)
+                setStaticFieldReliably(buildClass, "PRODUCT", product)
                 log("EVENT: VALUE_REPLACED | API: Build.PRODUCT (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(product)}")
             }
 
             val device = queryIpcValue(cr, NPatchConfig.KEY_BUILD_DEVICE)
             if (!device.isNullOrEmpty()) {
-                XposedHelpers.setStaticObjectField(buildClass, "DEVICE", device)
+                setStaticFieldReliably(buildClass, "DEVICE", device)
                 log("EVENT: VALUE_REPLACED | API: Build.DEVICE (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(device)}")
             }
 
             val fingerprint = queryIpcValue(cr, NPatchConfig.KEY_BUILD_FINGERPRINT)
             if (!fingerprint.isNullOrEmpty()) {
-                XposedHelpers.setStaticObjectField(buildClass, "FINGERPRINT", fingerprint)
+                setStaticFieldReliably(buildClass, "FINGERPRINT", fingerprint)
                 log("EVENT: VALUE_REPLACED | API: Build.FINGERPRINT (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(fingerprint)}")
             }
 
             val serial = queryIpcValue(cr, NPatchConfig.KEY_SERIAL)
             if (!serial.isNullOrEmpty()) {
                 @Suppress("DEPRECATION")
-                XposedHelpers.setStaticObjectField(buildClass, "SERIAL", serial)
+                setStaticFieldReliably(buildClass, "SERIAL", serial)
                 log("EVENT: VALUE_REPLACED | API: Build.SERIAL (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(serial)}")
             }
         } catch (e: Throwable) {
             log("Static Build fields override exception: ${e.message}")
+        } finally {
+            isHookExecuting.set(false)
         }
     }
 
@@ -389,7 +522,6 @@ class NPatchHookEntry : IXposedHookLoadPackage {
     private fun queryIpcValue(cr: ContentResolver?, key: String): String? {
         val resolver = cr ?: resolveContentResolver()
         if (resolver == null) {
-            log("EVENT: IPC_RESOLVER_UNAVAILABLE | Cannot resolve ContentResolver for IPC query of $key")
             return null
         }
         return try {
@@ -403,7 +535,6 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 } else null
             }
         } catch (e: Throwable) {
-            log("EVENT: IPC_QUERY_EXCEPTION | Key: $key | Error: ${e.message}")
             null
         }
     }
@@ -423,3 +554,4 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         Log.d(TAG, message)
     }
 }
+

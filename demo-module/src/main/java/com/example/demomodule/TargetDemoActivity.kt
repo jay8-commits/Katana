@@ -175,7 +175,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "3. Build.MODEL",
             targetMethod = "android.os.Build.MODEL (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"MODEL\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (MODEL)",
             actualValue = Build.MODEL,
             expectedValue = expectedProfile["buildModel"]
         )
@@ -184,7 +184,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "4. Build.MANUFACTURER",
             targetMethod = "android.os.Build.MANUFACTURER (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"MANUFACTURER\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (MANUFACTURER)",
             actualValue = Build.MANUFACTURER,
             expectedValue = expectedProfile["buildManufacturer"]
         )
@@ -193,7 +193,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "5. Build.BRAND",
             targetMethod = "android.os.Build.BRAND (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"BRAND\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (BRAND)",
             actualValue = Build.BRAND,
             expectedValue = expectedProfile["buildBrand"]
         )
@@ -202,7 +202,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "6. Build.PRODUCT",
             targetMethod = "android.os.Build.PRODUCT (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"PRODUCT\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (PRODUCT)",
             actualValue = Build.PRODUCT,
             expectedValue = expectedProfile["buildProduct"]
         )
@@ -211,7 +211,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "7. Build.DEVICE",
             targetMethod = "android.os.Build.DEVICE (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"DEVICE\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (DEVICE)",
             actualValue = Build.DEVICE,
             expectedValue = expectedProfile["buildDevice"]
         )
@@ -220,7 +220,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "8. Build.FINGERPRINT",
             targetMethod = "android.os.Build.FINGERPRINT (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"FINGERPRINT\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (FINGERPRINT)",
             actualValue = Build.FINGERPRINT,
             expectedValue = expectedProfile["buildFingerprint"]
         )
@@ -231,7 +231,7 @@ class TargetDemoActivity : AppCompatActivity() {
         auditItem(
             apiName = "9. Build.SERIAL",
             targetMethod = "android.os.Build.SERIAL (Static Field)",
-            hookEvent = "Application.attachBaseContext -> setStaticObjectField(Build, \"SERIAL\")",
+            hookEvent = "Dynamic Static Field & SystemProperties Sync (SERIAL)",
             actualValue = readStaticSerial,
             expectedValue = expectedProfile["serialNumber"]
         )
