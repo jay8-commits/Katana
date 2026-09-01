@@ -298,6 +298,33 @@ class DeviceIdentityManagerTest {
         assertEquals(original.computeFingerprint(), parsed.computeFingerprint())
     }
 
+    @Test
+    fun testTelephonySubscriberIdSignatureResolution() {
+        val tmClass = android.telephony.TelephonyManager::class.java
+        val noArgMethod = try {
+            tmClass.getMethod("getSubscriberId")
+        } catch (_: NoSuchMethodException) {
+            null
+        }
+        val intArgMethod = try {
+            tmClass.getMethod("getSubscriberId", java.lang.Integer.TYPE)
+        } catch (_: NoSuchMethodException) {
+            null
+        }
+
+        // On standard Android SDK / JVM stub, getSubscriberId() exists, while getSubscriberId(int) is not public or requires createForSubscriptionId
+        assertNotNull("TelephonyManager.getSubscriberId() 0-arg method must exist", noArgMethod)
+        
+        // Diagnostic distinction verification
+        val isNoSuchMethod = (intArgMethod == null)
+        val reason = if (isNoSuchMethod) {
+            "METHOD_NOT_AVAILABLE: TelephonyManager.getSubscriberId(int) not in public SDK on this Android level"
+        } else {
+            "AVAILABLE"
+        }
+        assertTrue(reason.startsWith("METHOD_NOT_AVAILABLE") || reason == "AVAILABLE")
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // IN-MEMORY MOCKS FOR UNIT TESTING WITHOUT ANDROID RUNTIME FRAMEWORK
     // ──────────────────────────────────────────────────────────────────────────

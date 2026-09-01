@@ -562,20 +562,28 @@ class SecondTargetActivity : AppCompatActivity() {
         try {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
-                val method = TelephonyManager::class.java.getMethod("getSubscriberId", Int::class.javaPrimitiveType)
-                readImsiSub = method.invoke(tm, 1) as? String
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    val subTm = tm.createForSubscriptionId(1)
+                    readImsiSub = subTm.subscriberId
+                } else {
+                    val method = TelephonyManager::class.java.getMethod("getSubscriberId", Int::class.javaPrimitiveType)
+                    readImsiSub = method.invoke(tm, 1) as? String
+                }
             }
         } catch (e: SecurityException) {
             isImsiSubRestricted = true
             imsiSubRestrictedReason = "SecurityException: ${e.message}"
+        } catch (e: NoSuchMethodException) {
+            isImsiSubRestricted = true
+            imsiSubRestrictedReason = "METHOD_NOT_AVAILABLE: TelephonyManager.getSubscriberId(int) not in public SDK on this Android level (${e.message})"
         } catch (e: Throwable) {
             isImsiSubRestricted = true
             imsiSubRestrictedReason = "${e.javaClass.simpleName}: ${e.message}"
         }
         auditItem(
             apiName = "20. TelephonyManager.getSubscriberId(int)",
-            targetMethod = "TelephonyManager.getSubscriberId(int subId=1)",
-            hookEvent = "TelephonyManager.getSubscriberId(int)",
+            targetMethod = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) "TelephonyManager.createForSubscriptionId(1).getSubscriberId()" else "TelephonyManager.getSubscriberId(int subId=1)",
+            hookEvent = "TelephonyManager.getSubscriberId()",
             actualValue = readImsiSub,
             expectedValue = expectedProfile["imei"],
             isPlatformRestricted = isImsiSubRestricted && readImsiSub == null,
