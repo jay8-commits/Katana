@@ -2,380 +2,80 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="#F8FAFC">
+    android:background="#090D16"
+    android:padding="16dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
         <TextView
-            android:id="@+id/tvSecondTitle"
-            android:layout_width="wrap_content"
+            android:id="@+id/tv_title"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Target App #2: Multi-Package Isolation Audit"
+            android:text="Target App #2 Verification Dashboard"
+            android:textColor="#FFFFFF"
             android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="#0F172A" />
+            android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/tvSecondPkg"
-            android:layout_width="wrap_content"
+            android:id="@+id/tv_subtitle"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Package: com.example.secondtargetapp"
-            android:textSize="13sp"
-            android:textColor="#64748B"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginTop="4dp"
+            android:text="Second Isolated Target Application (Zero Shared State)"
+            android:textColor="#94A3B8"
+            android:textSize="12sp" />
 
-        <!-- First Test: Single API (Settings.Secure.ANDROID_ID) Focus Card -->
+        <!-- 5-Stage Verification Banner -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#1E293B"
             android:orientation="vertical"
-            android:background="#FFFFFF"
-            android:padding="14dp"
-            android:layout_marginBottom="16dp"
-            android:elevation="2dp">
+            android:padding="16dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🎯 TARGET #2 TEST: Settings.Secure.ANDROID_ID"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#1D4ED8"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvSecondFirstTestStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="STATUS: PENDING"
-                android:textStyle="bold"
-                android:textSize="14sp"
-                android:textColor="#0F172A"
-                android:background="#F1F5F9"
-                android:padding="8dp"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvSecondFirstTestExpected"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="EXPECTED PROFILE: --"
-                android:fontFamily="monospace"
+                android:text="5-STAGE VERIFICATION MODEL"
+                android:textColor="#38BDF8"
                 android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
+                android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvSecondFirstTestActual"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="ACTUAL VALUE OBSERVED: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondFirstTestDiagnosis"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DIAGNOSIS: --"
-                android:fontFamily="monospace"
+                android:layout_marginTop="4dp"
+                android:text="HOOK_REGISTERED → HOOK_INVOKED → VALUE_GENERATED → VALUE_RETURNED → TARGET_OBSERVED"
+                android:textColor="#CBD5E1"
                 android:textSize="11sp"
-                android:textColor="#64748B" />
+                android:fontFamily="monospace" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Classification: LOCAL_LOOPBACK | PRIVATE_LAN | SYNTHETIC_TEST_IP (RFC 5737) | ACTUAL_PUBLIC_EGRESS_IP"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Location Verification Section -->
         <LinearLayout
+            android:id="@+id/layout_second_target_results"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#FFFFFF"
-            android:padding="14dp"
-            android:layout_marginBottom="16dp"
-            android:elevation="2dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="📍 LOCATION VERIFICATION"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#0D9488"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="STATUS: PENDING"
-                android:textStyle="bold"
-                android:textSize="14sp"
-                android:textColor="#0F172A"
-                android:background="#F1F5F9"
-                android:padding="8dp"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationExpected"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="EXPECTED LOCATION: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationActual"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ACTUAL LOCATION: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationLatMatch"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="LATITUDE MATCH: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationLngMatch"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="LONGITUDE MATCH: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationAltMatch"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ALTITUDE MATCH: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationAccMatch"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ACCURACY MATCH: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationWorldProfile"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="WORLD PROFILE: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#1D4ED8"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationSyntheticIp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="SYNTHETIC TEST IP: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationProfileConsistency"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="PROFILE CONSISTENCY: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#15803D"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationPublicIpNotice"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="IP SCOPE NOTICE: Synthetic test IP is application-level; physical network interface/VPN determines actual public IP."
-                android:fontFamily="monospace"
-                android:textSize="11sp"
-                android:textColor="#64748B"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationHookEvent"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="HOOK EVENT: LocationManager.getLastKnownLocation()"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondLocationDiagnosis"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DIAGNOSIS: --"
-                android:fontFamily="monospace"
-                android:textSize="11sp"
-                android:textColor="#64748B" />
-
-        </LinearLayout>
-
-        <!-- Network Information Verification Section -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#FFFFFF"
-            android:padding="14dp"
-            android:layout_marginBottom="16dp"
-            android:elevation="2dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🌐 NETWORK INFORMATION VERIFICATION"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#059669"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="STATUS: PENDING"
-                android:textStyle="bold"
-                android:textSize="14sp"
-                android:textColor="#0F172A"
-                android:background="#F1F5F9"
-                android:padding="8dp"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkExpectedIp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="EXPECTED SYNTHETIC IP: --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkWifiIp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="WIFI_INFO IP (getIpAddress): --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkDhcpIp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DHCP_INFO IP (getDhcpInfo): --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkWifiSsid"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="WIFI SSID (getSSID): --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkWifiMac"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="WIFI MAC (getMacAddress): --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkHardwareMac"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="HARDWARE MAC (NetworkInterface): --"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:textColor="#334155"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvSecondNetworkDiagnosis"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DIAGNOSIS: --"
-                android:fontFamily="monospace"
-                android:textSize="11sp"
-                android:textColor="#64748B" />
-
-        </LinearLayout>
+            android:layout_marginTop="16dp"
+            android:orientation="vertical" />
 
         <Button
-            android:id="@+id/btnSecondRefresh"
+            android:id="@+id/btn_reinvoke_second_target"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Run Android ID Audit &amp; Full Verification"
-            android:backgroundTint="#059669"
-            android:textColor="#FFFFFF"
-            android:layout_marginBottom="16dp" />
-
-        <TextView
-            android:id="@+id/tvSecondAuditSummary"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Audit Status: Pending"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="#1E293B"
-            android:background="#E2E8F0"
-            android:padding="10dp"
-            android:layout_marginBottom="16dp" />
-
-        <TextView
-            android:id="@+id/tvSecondAuditDetails"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textSize="12sp"
-            android:textColor="#0F172A"
-            android:background="#FFFFFF"
-            android:padding="12dp"
-            android:lineSpacingExtra="4dp" />
+            android:layout_marginTop="16dp"
+            android:text="RE-INVOKE ALL APIS (TARGET #2)" />
 
     </LinearLayout>
 </ScrollView>

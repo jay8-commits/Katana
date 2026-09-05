@@ -1,911 +1,876 @@
 package com.example.deviceidlab.hook
 
-import android.app.Activity
-import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
-import android.net.wifi.WifiInfo
-import android.os.Build
+import android.location.Location
+import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
-import android.telephony.TelephonyManager
 import android.util.Log
+import com.example.deviceidlab.demo.HookInvocationLog
+import com.example.deviceidlab.demo.InterceptionBridge
+import com.example.deviceidlab.provider.DeviceIdProvider
 import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
+import de.robv.android.xposed.XSharedPreferences
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.net.InetAddress
+import java.net.NetworkInterface
+import java.util.Collections
 
 /**
- * Generalized NPatch / LSPosed Hook Entry Point.
+ * NPatch 1.0.7 / LSPatch / Xposed Module Entry Point.
  *
- * Intercepts supported Android Device Information and Identity APIs
- * dynamically for any authorized target application across processes.
- *
- * Implements strict event logging, ThreadLocal recursion prevention,
- * masked diagnostics, and non-crash error handling.
+ * Architecture:
+ * - Target APK is patched and embedded ONLY ONCE.
+ * - Dynamically queries DeviceIdProvider via ContentResolver at runtime.
+ * - Allows unlimited test ID updates without repatching, reinstalling, or rebuilding.
  */
-class NPatchHookEntry : IXposedHookLoadPackage {
+class NPatchHookEntry : IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     companion object {
-        private const val TAG = "NPatch"
-        private const val CONTROLLER_PACKAGE = "com.example.deviceidlab"
-        private val isHookExecuting = ThreadLocal.withInitial { false }
+        const val TAG = "NPatchHookEntry"
+        const val PREF_FILE = "npatch_config"
+        const val KEY_ACTIVE_ANDROID_ID = "active_android_id"
+        const val KEY_ACTIVE_TELEPHONY_ID = "active_telephony_id"
+        const val KEY_INTERCEPTION_ENABLED = "interception_enabled"
+        const val KEY_TARGET_PACKAGE_FILTER = "target_package_filter"
+
+        private val PROVIDER_URI = Uri.parse("content://com.example.deviceidlab.provider")
+
+        /**
+         * Internal flag to track when the class is loaded by an active Xposed/NPatch environment.
+         */
+        @Volatile
+        var isXposedEnvironmentActive: Boolean = false
+            private set
     }
 
-    override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        // Exclude the controller module itself from being hooked
-        if (lpparam.packageName == CONTROLLER_PACKAGE) {
-            return
-        }
+    private var xSharedPreferences: XSharedPreferences? = null
 
-        log("EVENT: TARGET_PROCESS_STARTED | Package: ${lpparam.packageName} | Process: ${lpparam.processName}")
+    override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam?) {
+        isXposedEnvironmentActive = true
+        NPatchConfig.isXposedEnvironmentActive = true
+        val msg = "[NPATCH] Runtime loaded in Zygote (path=${startupParam?.modulePath})"
+        Log.i(TAG, msg)
+        XposedBridge.log(msg)
 
-        installApplicationStartupHooks(lpparam)
-        installActivityLifecycleHooks(lpparam)
-        installSystemPropertiesHooks(lpparam)
-        installSettingsSecureHooks(lpparam)
-        installBuildHooks(lpparam)
-        installTelephonyHooks(lpparam)
-        installWifiHooks(lpparam)
-        installNetworkInterfaceHooks(lpparam)
-        installLocationHooks(lpparam)
-    }
-
-    // -------------------------------------------------------------------------
-    // 0. Application Startup Hooks (Ensures Context-backed static field setup)
-    // -------------------------------------------------------------------------
-    private fun installApplicationStartupHooks(lpparam: LoadPackageParam) {
         try {
-            val appClass = XposedHelpers.findClass("android.app.Application", lpparam.classLoader)
-            XposedHelpers.findAndHookMethod(
-                appClass,
-                "attachBaseContext",
-                Context::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val ctx = param.args[0] as? Context ?: return
-                        try {
-                            syncStaticBuildFields(ctx.contentResolver, lpparam.packageName)
-                        } catch (e: Throwable) {
-                            log("attachBaseContext static field override skipped: ${e.message}")
-                        }
-                    }
-                }
-            )
-            XposedHelpers.findAndHookMethod(
-                appClass,
-                "onCreate",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val app = param.thisObject as? Application ?: return
-                        try {
-                            syncStaticBuildFields(app.contentResolver, lpparam.packageName)
-                        } catch (e: Throwable) {
-                            log("Application.onCreate static field override skipped: ${e.message}")
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: Application lifecycle (Static Field Initializer)")
-        } catch (e: Throwable) {
-            log("Application startup hook skipped: ${e.message}")
+            xSharedPreferences = XSharedPreferences("com.example.deviceidlab", PREF_FILE).apply {
+                makeWorldReadable()
+                reload()
+            }
+            val prefMsg = "[$TAG] [NPATCH INIT] [NPATCH STAGE: CONFIG_LOAD] XSharedPreferences loaded successfully for com.example.deviceidlab ($PREF_FILE)"
+            Log.d(TAG, prefMsg)
+            XposedBridge.log(prefMsg)
+        } catch (t: Throwable) {
+            val err = "[$TAG] [NPATCH FAILURE] [NPATCH STAGE: CONFIG_LOAD] XSharedPreferences init warning: ${t.message}"
+            Log.w(TAG, err, t)
+            XposedBridge.log(err)
         }
     }
 
-    // -------------------------------------------------------------------------
-    // 0.1 Activity Lifecycle Hooks (Ensures UI views always observe active profile)
-    // -------------------------------------------------------------------------
-    private fun installActivityLifecycleHooks(lpparam: LoadPackageParam) {
+    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+        isXposedEnvironmentActive = true
+        val pid = try { android.os.Process.myPid() } catch (_: Throwable) { 0 }
+
+        Log.i(TAG, "[NPATCH] Runtime loaded")
+        XposedBridge.log("[NPATCH] Runtime loaded")
+
+        val targetLog = "[NPATCH] Target process detected: pkg='${lpparam.packageName}', process='${lpparam.processName}', pid=$pid"
+        Log.i(TAG, targetLog)
+        XposedBridge.log(targetLog)
+
+        Log.i(TAG, "[NPATCH] Hook installation started in process='${lpparam.processName}'")
+        XposedBridge.log("[NPATCH] Hook installation started in process='${lpparam.processName}'")
+
+        var hookSuccessCount = 0
+
+        // 1. Hook canary diagnostic method to prove live framework bytecode interception
         try {
-            val activityClass = XposedHelpers.findClass("android.app.Activity", lpparam.classLoader)
             XposedHelpers.findAndHookMethod(
-                activityClass,
-                "onCreate",
-                Bundle::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val activity = param.thisObject as? Activity ?: return
-                        try {
-                            syncStaticBuildFields(activity.contentResolver, lpparam.packageName)
-                        } catch (_: Throwable) {}
-                    }
-                }
-            )
-            XposedHelpers.findAndHookMethod(
-                activityClass,
-                "onResume",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val activity = param.thisObject as? Activity ?: return
-                        try {
-                            syncStaticBuildFields(activity.contentResolver, lpparam.packageName)
-                        } catch (_: Throwable) {}
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: Activity lifecycle (Dynamic Static Sync)")
-        } catch (e: Throwable) {
-            log("Activity lifecycle hook skipped: ${e.message}")
-        }
-    }
+                "com.example.deviceidlab.DeviceIdReader",
+                lpparam.classLoader,
+                "isNpatchHookActive",
+                object : XC_MethodReplacement() {
+                    override fun replaceHookedMethod(param: MethodHookParam?): Any {
+                        val canaryLog = "[$TAG] [NPATCH CANARY] isNpatchHookActive() intercepted in process='${lpparam.processName}' (PID=$pid, pkg='${lpparam.packageName}') -> returning true"
+                        Log.i(TAG, canaryLog)
+                        XposedBridge.log(canaryLog)
 
-    // -------------------------------------------------------------------------
-    // 0.2 SystemProperties Hooks (Intercepts framework & native property queries)
-    // -------------------------------------------------------------------------
-    private fun installSystemPropertiesHooks(lpparam: LoadPackageParam) {
+                        NPatchAuditManager.recordHookEvent(
+                            context = null,
+                            targetPackage = lpparam.packageName,
+                            targetProcess = lpparam.processName,
+                            targetPid = pid,
+                            hookEntryStatus = "EXECUTED",
+                            hookInstallationStatus = "INSTALLED",
+                            canaryIntercepted = true,
+                            apiName = "DeviceIdReader.isNpatchHookActive"
+                        )
+                        return true
+                    }
+                }
+            )
+            hookSuccessCount++
+        } catch (t: Throwable) {
+            // Expected if hooking external target application where DeviceIdReader does not exist
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] DeviceIdReader not found in ${lpparam.packageName}: ${t.message}")
+        }
+
+        // 2. Hook Settings.Secure.getString(ContentResolver, String)
         try {
-            val sysPropClass = XposedHelpers.findClass("android.os.SystemProperties", lpparam.classLoader)
-
             XposedHelpers.findAndHookMethod(
-                sysPropClass,
-                "get",
-                String::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val key = param.args[0] as? String ?: return
-                        val replacement = getSystemPropertyReplacement(key)
-                        if (replacement != null) {
-                            param.result = replacement
-                        }
-                    }
-                }
-            )
-
-            XposedHelpers.findAndHookMethod(
-                sysPropClass,
-                "get",
-                String::class.java,
-                String::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val key = param.args[0] as? String ?: return
-                        val replacement = getSystemPropertyReplacement(key)
-                        if (replacement != null) {
-                            param.result = replacement
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: SystemProperties.get(String, [String])")
-        } catch (e: Throwable) {
-            log("SystemProperties hook skipped: ${e.message}")
-        }
-    }
-
-    private fun getSystemPropertyReplacement(key: String): String? {
-        return when {
-            key == "ro.product.model" || key.endsWith(".model") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_MODEL)
-            key == "ro.product.manufacturer" || key.endsWith(".manufacturer") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_MANUFACTURER)
-            key == "ro.product.brand" || key.endsWith(".brand") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_BRAND)
-            key == "ro.product.name" || key.endsWith(".name") || key == "ro.product.product.name" -> queryIpcValue(null, NPatchConfig.KEY_BUILD_PRODUCT)
-            key == "ro.product.device" || key.endsWith(".device") -> queryIpcValue(null, NPatchConfig.KEY_BUILD_DEVICE)
-            key == "ro.build.fingerprint" || key.endsWith(".fingerprint") || key == "ro.bootimage.build.fingerprint" -> queryIpcValue(null, NPatchConfig.KEY_BUILD_FINGERPRINT)
-            key == "ro.serialno" || key == "ro.boot.serialno" || key == "no.such.thing" -> queryIpcValue(null, NPatchConfig.KEY_SERIAL)
-            else -> null
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // 1. Settings.Secure Hooks (ANDROID_ID)
-    // -------------------------------------------------------------------------
-    private fun installSettingsSecureHooks(lpparam: LoadPackageParam) {
-        try {
-            val settingsSecureClass = XposedHelpers.findClass("android.provider.Settings\$Secure", lpparam.classLoader)
-
-            // Settings.Secure.getString(ContentResolver, String)
-            XposedHelpers.findAndHookMethod(
-                settingsSecureClass,
+                "android.provider.Settings\$Secure",
+                lpparam.classLoader,
                 "getString",
                 ContentResolver::class.java,
                 String::class.java,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val key = param.args[1] as? String ?: return
-                        if (Settings.Secure.ANDROID_ID == key) {
-                            val cr = param.args[0] as? ContentResolver
-                            try {
-                                isHookExecuting.set(true)
-                                log("EVENT: API_INVOCATION_INTERCEPTED | API: Settings.Secure.getString(ANDROID_ID) | Target: ${lpparam.packageName}")
-                                val originalVal = param.result as? String
-                                val spoofedId = queryIpcValue(cr, NPatchConfig.KEY_ANDROID_ID)
-                                if (!spoofedId.isNullOrEmpty()) {
-                                    log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: androidId | Val: ${TestApiCatalog.maskValue(spoofedId)}")
-                                    param.result = spoofedId
-                                    log("EVENT: VALUE_REPLACED | API: ANDROID_ID | Target: ${lpparam.packageName} | Orig: ${TestApiCatalog.maskValue(originalVal)} | Replaced: ${TestApiCatalog.maskValue(spoofedId)}")
-                                } else {
-                                    log("EVENT: PROFILE_LOOKUP_FAILED | Key: androidId | Falling back to unmodified result")
-                                }
-                            } finally {
-                                isHookExecuting.set(false)
+                        val settingName = param.args[1] as? String ?: return
+                        if (settingName.equals("android_id", ignoreCase = true)) {
+                            val resolver = param.args[0] as? ContentResolver
+                            val originalValue = param.result as? String ?: "null"
+
+                            Log.i(TAG, "[NPATCH] ANDROID_ID request intercepted in process='${lpparam.processName}' (PID=$pid)")
+                            XposedBridge.log("[NPATCH] ANDROID_ID request intercepted in process='${lpparam.processName}' (PID=$pid)")
+
+                            // Dynamic Tier 1: Query DeviceIdProvider from Controller app
+                            val dynamicIds = queryDynamicTestIds(resolver)
+                            val activeSimulatedId = dynamicIds?.first ?: resolveActiveAndroidId()
+
+                            if (isInterceptionEnabled() && !activeSimulatedId.isNullOrEmpty()) {
+                                param.result = activeSimulatedId
+
+                                Log.i(TAG, "[NPATCH] Returning current Android test ID: '$activeSimulatedId'")
+                                XposedBridge.log("[NPATCH] Returning current Android test ID: '$activeSimulatedId'")
+
+                                // Standardized NPatch Spoof log
+                                val spoofLog = "[$TAG] [NPATCH SPOOF] Package: '${lpparam.packageName}', Process: '${lpparam.processName}', PID: $pid, Original Android ID: '$originalValue', Spoofed Android ID: '$activeSimulatedId'"
+                                Log.i(TAG, spoofLog)
+                                XposedBridge.log(spoofLog)
+
+                                val readLog = "[NPATCH] Target read verification successful: package='${lpparam.packageName}', original='$originalValue', injected='$activeSimulatedId'"
+                                Log.i(TAG, readLog)
+                                XposedBridge.log(readLog)
+
+                                InterceptionBridge.logInvocation(
+                                    HookInvocationLog(
+                                        callerPackage = lpparam.packageName,
+                                        targetApi = "Settings.Secure.getString(android_id)",
+                                        requestedParam = settingName,
+                                        returnedValue = activeSimulatedId,
+                                        wasIntercepted = true,
+                                        reason = "NPatch 1.0.7 / Xposed module dynamically substituted current runtime Android test ID."
+                                    )
+                                )
+
+                                reportInterceptionEvent(
+                                    resolver = resolver,
+                                    targetPkg = lpparam.packageName,
+                                    targetProc = lpparam.processName,
+                                    targetPid = pid,
+                                    apiName = "Settings.Secure.getString(android_id)",
+                                    identifierType = DeviceIdProvider.TYPE_ANDROID_ID,
+                                    origId = originalValue,
+                                    injectedId = activeSimulatedId,
+                                    retId = activeSimulatedId
+                                )
                             }
-                            // Proactively synchronize Build static fields with active ContentResolver
-                            syncStaticBuildFields(cr, lpparam.packageName)
                         }
                     }
                 }
             )
-            log("EVENT: HOOK_REGISTERED | Hook: Settings.Secure.getString(ContentResolver, String)")
+            hookSuccessCount++
+            Log.i(TAG, "[NPATCH] Hook installed successfully on Settings.Secure.getString in pkg='${lpparam.packageName}'")
+            XposedBridge.log("[NPATCH] Hook installed successfully on Settings.Secure.getString in pkg='${lpparam.packageName}'")
+        } catch (t: Throwable) {
+            val errLog = "[$TAG] [NPATCH FAILURE] Failed to hook Settings.Secure.getString in pkg='${lpparam.packageName}': ${t.message}"
+            Log.e(TAG, errLog, t)
+            XposedBridge.log(errLog)
+        }
 
-            // Settings.Secure.getStringForUser(ContentResolver, String, int)
-            try {
-                XposedHelpers.findAndHookMethod(
-                    settingsSecureClass,
-                    "getStringForUser",
-                    ContentResolver::class.java,
-                    String::class.java,
-                    java.lang.Integer.TYPE,
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (isHookExecuting.get() == true) return
-                            val key = param.args[1] as? String ?: return
-                            if (Settings.Secure.ANDROID_ID == key) {
-                                val cr = param.args[0] as? ContentResolver
-                                try {
-                                    isHookExecuting.set(true)
-                                    log("EVENT: API_INVOCATION_INTERCEPTED | API: Settings.Secure.getStringForUser(ANDROID_ID) | Target: ${lpparam.packageName}")
-                                    val originalVal = param.result as? String
-                                    val spoofedId = queryIpcValue(cr, NPatchConfig.KEY_ANDROID_ID)
-                                    if (!spoofedId.isNullOrEmpty()) {
-                                        log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: androidId | Val: ${TestApiCatalog.maskValue(spoofedId)}")
-                                        param.result = spoofedId
-                                        log("EVENT: VALUE_REPLACED | API: ANDROID_ID (forUser) | Target: ${lpparam.packageName} | Orig: ${TestApiCatalog.maskValue(originalVal)} | Replaced: ${TestApiCatalog.maskValue(spoofedId)}")
-                                    } else {
-                                        log("EVENT: PROFILE_LOOKUP_FAILED | Key: androidId | Falling back to unmodified result")
-                                    }
-                                } finally {
-                                    isHookExecuting.set(false)
-                                }
-                                syncStaticBuildFields(cr, lpparam.packageName)
-                            }
-                        }
-                    }
-                )
-                log("EVENT: HOOK_REGISTERED | Hook: Settings.Secure.getStringForUser(ContentResolver, String, int)")
-            } catch (e: Throwable) {
-                log("getStringForUser hook skipped: ${e.message}")
-            }
-        } catch (e: Throwable) {
-            log("Error installing Settings.Secure hooks: ${e.message}")
+        // 3. Hook TelephonyManager methods
+        hookTelephonyMethods(lpparam)
+
+        // 4. Hook Additional Telephony & Hardware Identity APIs (completing the 21 protected APIs)
+        hookAdditionalIdentityMethods(lpparam)
+
+        // 5. Hook Worldwide Location Subsystem APIs
+        hookLocationMethods(lpparam)
+
+        // 6. Hook Java & Android Network APIs
+        hookNetworkMethods(lpparam)
+
+        // Record initial hook registration
+        NPatchAuditManager.recordHookEvent(
+            context = null,
+            targetPackage = lpparam.packageName,
+            targetProcess = lpparam.processName,
+            targetPid = pid,
+            hookEntryStatus = "EXECUTED",
+            hookInstallationStatus = if (hookSuccessCount > 0) "INSTALLED ($hookSuccessCount hooks)" else "INITIALIZED",
+            canaryIntercepted = false,
+            apiName = "handleLoadPackage"
+        )
+    }
+
+    data class DynamicProfile(
+        val androidId: String = "NPATCH_ANDROID_001",
+        val telephonyId: String = "NPATCH_TELEPHONY_001",
+        val syntheticIp: String = NPatchConfig.DEFAULT_SYNTHETIC_IP,
+        val macAddress: String = NPatchConfig.DEFAULT_MAC,
+        val wifiSsid: String = NPatchConfig.DEFAULT_SSID,
+        val wifiBssid: String = NPatchConfig.DEFAULT_BSSID,
+        val latitude: Double = 37.7749,
+        val longitude: Double = -122.4194,
+        val city: String = "San Francisco",
+        val country: String = "US",
+        val timezone: String = "America/Los_Angeles",
+        val lifecycle: String = NPatchConfig.STATE_ACTIVE
+    )
+
+    private fun queryDynamicProfile(resolver: ContentResolver?): DynamicProfile {
+        if (resolver == null) return DynamicProfile()
+        return try {
+            val bundle = resolver.call(
+                PROVIDER_URI,
+                DeviceIdProvider.METHOD_GET_CURRENT_TEST_IDS,
+                null,
+                null
+            ) ?: return DynamicProfile()
+
+            DynamicProfile(
+                androidId = bundle.getString(DeviceIdProvider.KEY_ANDROID_TEST_ID)
+                    ?: bundle.getString(DeviceIdProvider.KEY_TEST_ID) ?: "NPATCH_ANDROID_001",
+                telephonyId = bundle.getString(DeviceIdProvider.KEY_TELEPHONY_TEST_ID) ?: "NPATCH_TELEPHONY_001",
+                syntheticIp = bundle.getString(NPatchConfig.KEY_ACTIVE_SYNTHETIC_IP) ?: NPatchConfig.DEFAULT_SYNTHETIC_IP,
+                macAddress = bundle.getString(NPatchConfig.KEY_ACTIVE_MAC_ADDRESS) ?: NPatchConfig.DEFAULT_MAC,
+                wifiSsid = bundle.getString(NPatchConfig.KEY_ACTIVE_WIFI_SSID) ?: NPatchConfig.DEFAULT_SSID,
+                wifiBssid = bundle.getString(NPatchConfig.KEY_ACTIVE_WIFI_BSSID) ?: NPatchConfig.DEFAULT_BSSID,
+                latitude = if (bundle.containsKey(NPatchConfig.KEY_ACTIVE_LATITUDE)) bundle.getDouble(NPatchConfig.KEY_ACTIVE_LATITUDE) else 37.7749,
+                longitude = if (bundle.containsKey(NPatchConfig.KEY_ACTIVE_LONGITUDE)) bundle.getDouble(NPatchConfig.KEY_ACTIVE_LONGITUDE) else -122.4194,
+                city = bundle.getString(NPatchConfig.KEY_ACTIVE_CITY) ?: "San Francisco",
+                country = bundle.getString(NPatchConfig.KEY_ACTIVE_COUNTRY) ?: "US",
+                timezone = bundle.getString(NPatchConfig.KEY_ACTIVE_TIMEZONE) ?: "America/Los_Angeles",
+                lifecycle = bundle.getString(NPatchConfig.KEY_PROFILE_LIFECYCLE) ?: NPatchConfig.STATE_ACTIVE
+            )
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH] queryDynamicProfile fallback: ${t.message}")
+            DynamicProfile()
         }
     }
 
-    // -------------------------------------------------------------------------
-    // 2. Build Information Hooks
-    // -------------------------------------------------------------------------
-    private fun installBuildHooks(lpparam: LoadPackageParam) {
-        try {
-            val buildClass = XposedHelpers.findClass("android.os.Build", lpparam.classLoader)
-
-            // Initial static override attempt
-            syncStaticBuildFields(null, lpparam.packageName)
-
-            // Hook Build.getSerial() (API 26+)
-            try {
-                XposedHelpers.findAndHookMethod(
-                    buildClass,
-                    "getSerial",
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (isHookExecuting.get() == true) return
-                            try {
-                                isHookExecuting.set(true)
-                                log("EVENT: API_INVOCATION_INTERCEPTED | API: Build.getSerial() | Target: ${lpparam.packageName}")
-                                val originalVal = param.result as? String
-                                val spoofedSerial = queryIpcValue(null, NPatchConfig.KEY_SERIAL)
-                                if (!spoofedSerial.isNullOrEmpty()) {
-                                    log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: serialNumber | Val: ${TestApiCatalog.maskValue(spoofedSerial)}")
-                                    param.result = spoofedSerial
-                                    log("EVENT: VALUE_REPLACED | API: Build.getSerial() | Target: ${lpparam.packageName} | Orig: ${TestApiCatalog.maskValue(originalVal)} | Replaced: ${TestApiCatalog.maskValue(spoofedSerial)}")
-                                } else {
-                                    log("EVENT: PROFILE_LOOKUP_FAILED | Key: serialNumber")
-                                }
-                            } finally {
-                                isHookExecuting.set(false)
-                            }
-                        }
-                    }
-                )
-                log("EVENT: HOOK_REGISTERED | Hook: Build.getSerial()")
-            } catch (e: Throwable) {
-                log("Build.getSerial hook skipped: ${e.message}")
-            }
-        } catch (e: Throwable) {
-            log("Error installing Build hooks: ${e.message}")
-        }
+    private fun queryDynamicTestIds(resolver: ContentResolver?): Pair<String?, String?>? {
+        val profile = queryDynamicProfile(resolver)
+        return Pair(profile.androidId, profile.telephonyId)
     }
 
-    private fun setStaticFieldReliably(clazz: Class<*>, fieldName: String, value: Any?) {
-        try {
-            val field = clazz.getDeclaredField(fieldName)
-            field.isAccessible = true
-            field.set(null, value)
-        } catch (_: Throwable) {
+    private fun queryDynamicTestId(resolver: ContentResolver?): String? {
+        return queryDynamicProfile(resolver).androidId
+    }
+
+    private fun queryDynamicTelephonyId(resolver: ContentResolver?): String? {
+        return queryDynamicProfile(resolver).telephonyId
+    }
+
+    private fun resolveContentResolver(thisObj: Any?): ContentResolver? {
+        if (thisObj != null) {
             try {
-                XposedHelpers.setStaticObjectField(clazz, fieldName, value)
+                val ctx = XposedHelpers.getObjectField(thisObj, "mContext") as? Context
+                if (ctx != null) return ctx.contentResolver
+            } catch (_: Throwable) {}
+        }
+        try {
+            val activityThreadClass = Class.forName("android.app.ActivityThread")
+            val currentAppMethod = activityThreadClass.getMethod("currentApplication")
+            val app = currentAppMethod.invoke(null) as? Context
+            if (app != null) return app.contentResolver
+        } catch (_: Throwable) {}
+        return null
+    }
+
+    private fun reportInterceptionEvent(
+        resolver: ContentResolver?,
+        targetPkg: String,
+        targetProc: String,
+        targetPid: Int,
+        apiName: String,
+        identifierType: String = DeviceIdProvider.TYPE_ANDROID_ID,
+        origId: String,
+        injectedId: String,
+        retId: String
+    ) {
+        NPatchAuditManager.recordHookEvent(
+            context = null,
+            targetPackage = targetPkg,
+            targetProcess = targetProc,
+            targetPid = targetPid,
+            hookEntryStatus = "EXECUTED",
+            hookInstallationStatus = "ACTIVE_INTERCEPTION",
+            canaryIntercepted = true,
+            apiName = apiName,
+            originalId = origId,
+            injectedId = injectedId,
+            returnedId = retId
+        )
+
+        val targetResolver = resolver ?: resolveContentResolver(null)
+        if (targetResolver != null) {
+            try {
+                val extras = Bundle().apply {
+                    putString(DeviceIdProvider.KEY_TARGET_PACKAGE, targetPkg)
+                    putString(DeviceIdProvider.KEY_TARGET_PROCESS, targetProc)
+                    putInt(DeviceIdProvider.KEY_TARGET_PID, targetPid)
+                    putString(DeviceIdProvider.KEY_API_NAME, apiName)
+                    putString(DeviceIdProvider.KEY_IDENTIFIER_TYPE, identifierType)
+                    putString(DeviceIdProvider.KEY_ORIGINAL_ID, origId)
+                    putString(DeviceIdProvider.KEY_RETURNED_ID, retId)
+                    putLong(DeviceIdProvider.KEY_TIMESTAMP, System.currentTimeMillis())
+                }
+                targetResolver.call(
+                    PROVIDER_URI,
+                    DeviceIdProvider.METHOD_REPORT_INTERCEPTION,
+                    null,
+                    extras
+                )
             } catch (_: Throwable) {}
         }
     }
 
-    private fun syncStaticBuildFields(cr: ContentResolver?, packageName: String) {
-        if (isHookExecuting.get() == true) return
+    private fun hookTelephonyMethods(lpparam: XC_LoadPackage.LoadPackageParam) {
+        val telephonyClass = "android.telephony.TelephonyManager"
+
+        // getDeviceId()
         try {
-            isHookExecuting.set(true)
-            val buildClass = Build::class.java
-
-            val model = queryIpcValue(cr, NPatchConfig.KEY_BUILD_MODEL)
-            if (!model.isNullOrEmpty()) {
-                setStaticFieldReliably(buildClass, "MODEL", model)
-                log("EVENT: VALUE_REPLACED | API: Build.MODEL (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(model)}")
-            }
-
-            val manufacturer = queryIpcValue(cr, NPatchConfig.KEY_BUILD_MANUFACTURER)
-            if (!manufacturer.isNullOrEmpty()) {
-                setStaticFieldReliably(buildClass, "MANUFACTURER", manufacturer)
-                log("EVENT: VALUE_REPLACED | API: Build.MANUFACTURER (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(manufacturer)}")
-            }
-
-            val brand = queryIpcValue(cr, NPatchConfig.KEY_BUILD_BRAND)
-            if (!brand.isNullOrEmpty()) {
-                setStaticFieldReliably(buildClass, "BRAND", brand)
-                log("EVENT: VALUE_REPLACED | API: Build.BRAND (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(brand)}")
-            }
-
-            val product = queryIpcValue(cr, NPatchConfig.KEY_BUILD_PRODUCT)
-            if (!product.isNullOrEmpty()) {
-                setStaticFieldReliably(buildClass, "PRODUCT", product)
-                log("EVENT: VALUE_REPLACED | API: Build.PRODUCT (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(product)}")
-            }
-
-            val device = queryIpcValue(cr, NPatchConfig.KEY_BUILD_DEVICE)
-            if (!device.isNullOrEmpty()) {
-                setStaticFieldReliably(buildClass, "DEVICE", device)
-                log("EVENT: VALUE_REPLACED | API: Build.DEVICE (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(device)}")
-            }
-
-            val fingerprint = queryIpcValue(cr, NPatchConfig.KEY_BUILD_FINGERPRINT)
-            if (!fingerprint.isNullOrEmpty()) {
-                setStaticFieldReliably(buildClass, "FINGERPRINT", fingerprint)
-                log("EVENT: VALUE_REPLACED | API: Build.FINGERPRINT (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(fingerprint)}")
-            }
-
-            val serial = queryIpcValue(cr, NPatchConfig.KEY_SERIAL)
-            if (!serial.isNullOrEmpty()) {
-                @Suppress("DEPRECATION")
-                setStaticFieldReliably(buildClass, "SERIAL", serial)
-                log("EVENT: VALUE_REPLACED | API: Build.SERIAL (Static) | Target: $packageName | Replaced: ${TestApiCatalog.maskValue(serial)}")
-            }
-        } catch (e: Throwable) {
-            log("Static Build fields override exception: ${e.message}")
-        } finally {
-            isHookExecuting.set(false)
+            XposedHelpers.findAndHookMethod(
+                telephonyClass,
+                lpparam.classLoader,
+                "getDeviceId",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "getDeviceId()")
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on TelephonyManager.getDeviceId() in ${lpparam.packageName}")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] TelephonyManager.getDeviceId() hook skipped: ${t.message}")
         }
+
+        // getDeviceId(int)
+        try {
+            XposedHelpers.findAndHookMethod(
+                telephonyClass,
+                lpparam.classLoader,
+                "getDeviceId",
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "getDeviceId(slot)")
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on TelephonyManager.getDeviceId(int) in ${lpparam.packageName}")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] TelephonyManager.getDeviceId(int) hook skipped: ${t.message}")
+        }
+
+        // getImei()
+        try {
+            XposedHelpers.findAndHookMethod(
+                telephonyClass,
+                lpparam.classLoader,
+                "getImei",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "getImei()")
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on TelephonyManager.getImei() in ${lpparam.packageName}")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] TelephonyManager.getImei() hook skipped: ${t.message}")
+        }
+
+        // getImei(int)
+        try {
+            XposedHelpers.findAndHookMethod(
+                telephonyClass,
+                lpparam.classLoader,
+                "getImei",
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "getImei(slot)")
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on TelephonyManager.getImei(int) in ${lpparam.packageName}")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] TelephonyManager.getImei(int) hook skipped: ${t.message}")
+        }
+
+        // getMeid()
+        try {
+            XposedHelpers.findAndHookMethod(
+                telephonyClass,
+                lpparam.classLoader,
+                "getMeid",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "getMeid()")
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+
+        // getMeid(int)
+        try {
+            XposedHelpers.findAndHookMethod(
+                telephonyClass,
+                lpparam.classLoader,
+                "getMeid",
+                Int::class.javaPrimitiveType,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "getMeid(slot)")
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
     }
 
-    // -------------------------------------------------------------------------
-    // 3. TelephonyManager Hooks (Including Overloads)
-    // -------------------------------------------------------------------------
-    private fun installTelephonyHooks(lpparam: LoadPackageParam) {
-        try {
-            val telephonyManagerClass = XposedHelpers.findClass("android.telephony.TelephonyManager", lpparam.classLoader)
+    private fun applyTelephonyOverride(
+        packageName: String,
+        processName: String,
+        param: XC_MethodHook.MethodHookParam,
+        apiName: String
+    ) {
+        if (!isInterceptionEnabled()) return
 
-            // 1. getDeviceId() & getDeviceId(int)
-            hookTelephonyMethod(telephonyManagerClass, "getDeviceId", lpparam.packageName, NPatchConfig.KEY_IMEI)
-            hookTelephonySlotMethod(telephonyManagerClass, "getDeviceId", lpparam.packageName, NPatchConfig.KEY_IMEI)
+        val pid = try { android.os.Process.myPid() } catch (_: Throwable) { 0 }
+        val resolver = resolveContentResolver(param.thisObject)
+        val dynamicTelephonyId = queryDynamicTelephonyId(resolver)
+        val activeSimulatedTelephony = dynamicTelephonyId ?: resolveActiveTelephonyId() ?: "NPATCH_TELEPHONY_001"
 
-            // 2. getImei() & getImei(int)
-            hookTelephonyMethod(telephonyManagerClass, "getImei", lpparam.packageName, NPatchConfig.KEY_IMEI)
-            hookTelephonySlotMethod(telephonyManagerClass, "getImei", lpparam.packageName, NPatchConfig.KEY_IMEI)
+        // Clear any security exceptions thrown by platform on Android 10+ (API 29+)
+        param.throwable = null
+        param.result = activeSimulatedTelephony
 
-            // 3. getMeid() & getMeid(int)
-            hookTelephonyMethod(telephonyManagerClass, "getMeid", lpparam.packageName, NPatchConfig.KEY_IMEI)
-            hookTelephonySlotMethod(telephonyManagerClass, "getMeid", lpparam.packageName, NPatchConfig.KEY_IMEI)
+        val msg = "[$TAG] [NPATCH HOOK] [NPATCH VERIFIED] $apiName -> '$activeSimulatedTelephony' in pkg='$packageName', process='$processName' (PID $pid)"
+        Log.i(TAG, msg)
+        XposedBridge.log(msg)
 
-            // 4. getSimSerialNumber() & getSimSerialNumber(int)
-            hookTelephonyMethod(telephonyManagerClass, "getSimSerialNumber", lpparam.packageName, NPatchConfig.KEY_SERIAL)
-            hookTelephonySlotMethod(telephonyManagerClass, "getSimSerialNumber", lpparam.packageName, NPatchConfig.KEY_SERIAL)
+        InterceptionBridge.logInvocation(
+            HookInvocationLog(
+                callerPackage = packageName,
+                targetApi = "TelephonyManager.$apiName",
+                requestedParam = "NONE",
+                returnedValue = activeSimulatedTelephony,
+                wasIntercepted = true,
+                reason = "NPatch 1.0.7 / Xposed module dynamically substituted current runtime Telephony ID."
+            )
+        )
 
-            // 5. getSubscriberId() & getSubscriberId(int)
-            hookTelephonyMethod(telephonyManagerClass, "getSubscriberId", lpparam.packageName, NPatchConfig.KEY_IMEI)
-            hookTelephonySlotMethod(telephonyManagerClass, "getSubscriberId", lpparam.packageName, NPatchConfig.KEY_IMEI)
-
-            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager (10 methods & slot overloads)")
-        } catch (e: Throwable) {
-            log("TelephonyManager hooks skipped: ${e.message}")
-        }
+        reportInterceptionEvent(
+            resolver = resolver,
+            targetPkg = packageName,
+            targetProc = processName,
+            targetPid = pid,
+            apiName = "TelephonyManager.$apiName",
+            identifierType = DeviceIdProvider.TYPE_TELEPHONY_ID,
+            origId = "Hardware / Restricted",
+            injectedId = activeSimulatedTelephony,
+            retId = activeSimulatedTelephony
+        )
     }
 
-    private fun hookTelephonyMethod(clazz: Class<*>, methodName: String, targetPackage: String, configKey: String) {
-        try {
-            XposedHelpers.findAndHookMethod(
-                clazz,
-                methodName,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            log("EVENT: API_INVOCATION_INTERCEPTED | API: TelephonyManager.$methodName() | Target: $targetPackage")
-                            val spoofedVal = queryIpcValue(null, configKey)
-                            if (!spoofedVal.isNullOrEmpty()) {
-                                param.result = spoofedVal
-                                log("EVENT: VALUE_REPLACED | API: TelephonyManager.$methodName() | Target: $targetPackage | Replaced: ${TestApiCatalog.maskValue(spoofedVal)}")
-                            } else {
-                                log("EVENT: PROFILE_LOOKUP_FAILED | Key: $configKey")
-                            }
-                        } catch (e: Throwable) {
-                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: $methodName | Error: ${e.message}")
-                        } finally {
-                            isHookExecuting.set(false)
+    private fun hookAdditionalIdentityMethods(lpparam: XC_LoadPackage.LoadPackageParam) {
+        val telephonyClass = "android.telephony.TelephonyManager"
+        val stringGetters = listOf(
+            "getSubscriberId",
+            "getSimSerialNumber",
+            "getLine1Number",
+            "getSimCountryIso",
+            "getSimOperator",
+            "getSimOperatorName",
+            "getNetworkCountryIso",
+            "getNetworkOperator",
+            "getNetworkOperatorName"
+        )
+        for (methodName in stringGetters) {
+            try {
+                XposedHelpers.findAndHookMethod(
+                    telephonyClass,
+                    lpparam.classLoader,
+                    methodName,
+                    object : XC_MethodHook() {
+                        override fun afterHookedMethod(param: MethodHookParam) {
+                            applyTelephonyOverride(lpparam.packageName, lpparam.processName, param, "$methodName()")
                         }
                     }
+                )
+            } catch (_: Throwable) {}
+        }
 
+        // Build.getSerial() (API 26+)
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.os.Build",
+                lpparam.classLoader,
+                "getSerial",
+                object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            val spoofedVal = queryIpcValue(null, configKey)
-                            if (!spoofedVal.isNullOrEmpty()) {
-                                param.throwable = null
-                                param.result = spoofedVal
-                            }
-                        } catch (_: Throwable) {
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        param.throwable = null
+                        param.result = profile.telephonyId
                     }
                 }
             )
-            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager.$methodName()")
-        } catch (e: Throwable) {
-            log("Hook TelephonyManager.$methodName skipped: ${e.message}")
-        }
+        } catch (_: Throwable) {}
     }
 
-    private fun hookTelephonySlotMethod(clazz: Class<*>, methodName: String, targetPackage: String, configKey: String) {
+    private fun hookLocationMethods(lpparam: XC_LoadPackage.LoadPackageParam) {
+        val pid = try { android.os.Process.myPid() } catch (_: Throwable) { 0 }
+
+        // LocationManager.getLastKnownLocation(String)
         try {
             XposedHelpers.findAndHookMethod(
-                clazz,
-                methodName,
-                java.lang.Integer.TYPE,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val slot = (param.args.getOrNull(0) as? Int) ?: 0
-                        try {
-                            isHookExecuting.set(true)
-                            log("EVENT: API_INVOCATION_INTERCEPTED | API: TelephonyManager.$methodName($slot) | Target: $targetPackage")
-                            val spoofedVal = queryIpcValue(null, configKey)
-                            if (!spoofedVal.isNullOrEmpty()) {
-                                param.result = spoofedVal
-                                log("EVENT: VALUE_REPLACED | API: TelephonyManager.$methodName($slot) | Target: $targetPackage | Replaced: ${TestApiCatalog.maskValue(spoofedVal)}")
-                            } else {
-                                log("EVENT: PROFILE_LOOKUP_FAILED | Key: $configKey")
-                            }
-                        } catch (e: Throwable) {
-                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: $methodName($slot) | Error: ${e.message}")
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            val spoofedVal = queryIpcValue(null, configKey)
-                            if (!spoofedVal.isNullOrEmpty()) {
-                                param.throwable = null
-                                param.result = spoofedVal
-                            }
-                        } catch (_: Throwable) {
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: TelephonyManager.$methodName(int)")
-        } catch (e: Throwable) {
-            log("Hook TelephonyManager.$methodName(int) skipped: ${e.message}")
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // 4. WifiInfo & Network Information Hooks
-    // -------------------------------------------------------------------------
-    private fun installWifiHooks(lpparam: LoadPackageParam) {
-        try {
-            val wifiInfoClass = XposedHelpers.findClass("android.net.wifi.WifiInfo", lpparam.classLoader)
-
-            // 4.1 WifiInfo.getMacAddress()
-            XposedHelpers.findAndHookMethod(
-                wifiInfoClass,
-                "getMacAddress",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            log("EVENT: API_INVOCATION_INTERCEPTED | API: WifiInfo.getMacAddress() | Target: ${lpparam.packageName}")
-                            val originalVal = param.result as? String
-                            val spoofedMac = queryIpcValue(null, NPatchConfig.KEY_MAC)
-                            if (!spoofedMac.isNullOrEmpty()) {
-                                log("EVENT: PROFILE_LOOKUP_SUCCESS | Key: macAddress | Val: ${TestApiCatalog.maskValue(spoofedMac)}")
-                                param.result = spoofedMac
-                                log("EVENT: VALUE_REPLACED | API: WifiInfo.getMacAddress() | Target: ${lpparam.packageName} | Orig: ${TestApiCatalog.maskValue(originalVal)} | Replaced: ${TestApiCatalog.maskValue(spoofedMac)}")
-                            } else {
-                                log("EVENT: PROFILE_LOOKUP_FAILED | Key: macAddress")
-                            }
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getMacAddress()")
-
-            // 4.2 WifiInfo.getIpAddress() -> little-endian 32-bit int
-            XposedHelpers.findAndHookMethod(
-                wifiInfoClass,
-                "getIpAddress",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            log("EVENT: API_INVOCATION_INTERCEPTED | API: WifiInfo.getIpAddress() | Target: ${lpparam.packageName}")
-                            val syntheticIp = queryIpcValue(null, NPatchConfig.KEY_TEST_IPV4)
-                                ?: queryIpcValue(null, NPatchConfig.KEY_LOC_SYNTHETIC_IP)
-                                ?: "192.0.2.101"
-                            val ipInt = parseIpv4ToLittleEndianInt(syntheticIp)
-                            param.result = ipInt
-                            log("EVENT: VALUE_REPLACED | API: WifiInfo.getIpAddress() | Target: ${lpparam.packageName} | Replaced: $syntheticIp (int=$ipInt)")
-                        } catch (e: Throwable) {
-                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: WifiInfo.getIpAddress | Error: ${e.message}")
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getIpAddress()")
-
-            // 4.3 WifiInfo.getSSID()
-            XposedHelpers.findAndHookMethod(
-                wifiInfoClass,
-                "getSSID",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            val spoofedSsid = queryIpcValue(null, NPatchConfig.KEY_WIFI_SSID) ?: "\"TestLab-WiFi\""
-                            param.result = spoofedSsid
-                            log("EVENT: VALUE_REPLACED | API: WifiInfo.getSSID() | Target: ${lpparam.packageName} | Replaced: $spoofedSsid")
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getSSID()")
-
-            // 4.4 WifiInfo.getBSSID()
-            XposedHelpers.findAndHookMethod(
-                wifiInfoClass,
-                "getBSSID",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            val spoofedBssid = queryIpcValue(null, NPatchConfig.KEY_WIFI_BSSID) ?: "02:00:00:00:00:00"
-                            param.result = spoofedBssid
-                            log("EVENT: VALUE_REPLACED | API: WifiInfo.getBSSID() | Target: ${lpparam.packageName} | Replaced: $spoofedBssid")
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getBSSID()")
-
-            // 4.5 WifiManager.getDhcpInfo()
-            val wifiManagerClass = XposedHelpers.findClass("android.net.wifi.WifiManager", lpparam.classLoader)
-            XposedHelpers.findAndHookMethod(
-                wifiManagerClass,
-                "getDhcpInfo",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            log("EVENT: API_INVOCATION_INTERCEPTED | API: WifiManager.getDhcpInfo() | Target: ${lpparam.packageName}")
-                            val syntheticIp = queryIpcValue(null, NPatchConfig.KEY_TEST_IPV4)
-                                ?: queryIpcValue(null, NPatchConfig.KEY_LOC_SYNTHETIC_IP)
-                                ?: "192.0.2.101"
-                            val ipInt = parseIpv4ToLittleEndianInt(syntheticIp)
-                            val parts = syntheticIp.split(".")
-                            val gatewayStr = if (parts.size == 4) "${parts[0]}.${parts[1]}.${parts[2]}.1" else "192.0.2.1"
-                            val gatewayInt = parseIpv4ToLittleEndianInt(gatewayStr)
-
-                            val dhcp = android.net.DhcpInfo()
-                            dhcp.ipAddress = ipInt
-                            dhcp.gateway = gatewayInt
-                            dhcp.serverAddress = gatewayInt
-                            dhcp.netmask = 0x00FFFFFF // 255.255.255.0 little-endian
-                            dhcp.dns1 = parseIpv4ToLittleEndianInt("8.8.8.8")
-                            dhcp.dns2 = parseIpv4ToLittleEndianInt("8.8.4.4")
-
-                            param.result = dhcp
-                            log("EVENT: VALUE_REPLACED | API: WifiManager.getDhcpInfo() | Target: ${lpparam.packageName} | Replaced: IP=$syntheticIp, GW=$gatewayStr")
-                        } catch (e: Throwable) {
-                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: WifiManager.getDhcpInfo | Error: ${e.message}")
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: WifiManager.getDhcpInfo()")
-
-        } catch (e: Throwable) {
-            log("Wifi hooks skipped: ${e.message}")
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // 4.6 Java NetworkInterface Hooks (getHardwareAddress)
-    // -------------------------------------------------------------------------
-    private fun installNetworkInterfaceHooks(lpparam: LoadPackageParam) {
-        try {
-            val netIfClass = XposedHelpers.findClass("java.net.NetworkInterface", lpparam.classLoader)
-            XposedHelpers.findAndHookMethod(
-                netIfClass,
-                "getHardwareAddress",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        try {
-                            isHookExecuting.set(true)
-                            val spoofedMac = queryIpcValue(null, NPatchConfig.KEY_MAC)
-                            if (!spoofedMac.isNullOrEmpty()) {
-                                val macBytes = parseMacToBytes(spoofedMac)
-                                if (macBytes != null) {
-                                    param.result = macBytes
-                                    log("EVENT: VALUE_REPLACED | API: NetworkInterface.getHardwareAddress() | Target: ${lpparam.packageName} | Replaced: ${TestApiCatalog.maskValue(spoofedMac)}")
-                                }
-                            }
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: NetworkInterface.getHardwareAddress()")
-        } catch (e: Throwable) {
-            log("NetworkInterface hook skipped: ${e.message}")
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // 5. Location Subsystem Hooks
-    // -------------------------------------------------------------------------
-    private fun installLocationHooks(lpparam: LoadPackageParam) {
-        try {
-            val locationManagerClass = XposedHelpers.findClass("android.location.LocationManager", lpparam.classLoader)
-
-            // 5.1 Hook getLastKnownLocation(String)
-            XposedHelpers.findAndHookMethod(
-                locationManagerClass,
+                "android.location.LocationManager",
+                lpparam.classLoader,
                 "getLastKnownLocation",
                 String::class.java,
                 object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val requestedProvider = (param.args.getOrNull(0) as? String) ?: "gps"
-                        try {
-                            isHookExecuting.set(true)
-                            log("EVENT: API_INVOCATION_INTERCEPTED | API: LocationManager.getLastKnownLocation($requestedProvider) | Target: ${lpparam.packageName}")
-                            val locProfile = queryLocationIpcProfile(null)
-                            if (locProfile != null) {
-                                val locationClass = XposedHelpers.findClass("android.location.Location", lpparam.classLoader)
-                                val syntheticLoc = XposedHelpers.newInstance(locationClass, requestedProvider)
-                                XposedHelpers.callMethod(syntheticLoc, "setLatitude", locProfile.latitude)
-                                XposedHelpers.callMethod(syntheticLoc, "setLongitude", locProfile.longitude)
-                                XposedHelpers.callMethod(syntheticLoc, "setAltitude", locProfile.altitude)
-                                XposedHelpers.callMethod(syntheticLoc, "setAccuracy", locProfile.accuracy)
-                                XposedHelpers.callMethod(syntheticLoc, "setSpeed", locProfile.speed)
-                                XposedHelpers.callMethod(syntheticLoc, "setBearing", locProfile.bearing)
-                                XposedHelpers.callMethod(syntheticLoc, "setTime", locProfile.timestamp)
-                                try {
-                                    XposedHelpers.callMethod(syntheticLoc, "setElapsedRealtimeNanos", locProfile.elapsedRealtimeNanos)
-                                } catch (_: Throwable) {}
-
-                                param.result = syntheticLoc
-                                log("EVENT: VALUE_REPLACED | API: LocationManager.getLastKnownLocation($requestedProvider) | Target: ${lpparam.packageName} | Replaced: Lat=${locProfile.latitude}, Lng=${locProfile.longitude}, Alt=${locProfile.altitude}")
-                            } else {
-                                log("EVENT: PROFILE_LOOKUP_FAILED | Subsystem: location | Key: locationProfile")
-                            }
-                        } catch (e: Throwable) {
-                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: getLastKnownLocation | Error: ${e.message}")
-                        } finally {
-                            isHookExecuting.set(false)
-                        }
-                    }
-
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val requestedProvider = (param.args.getOrNull(0) as? String) ?: "gps"
-                        try {
-                            isHookExecuting.set(true)
-                            val locProfile = queryLocationIpcProfile(null)
-                            if (locProfile != null) {
-                                val locationClass = XposedHelpers.findClass("android.location.Location", lpparam.classLoader)
-                                val syntheticLoc = XposedHelpers.newInstance(locationClass, requestedProvider)
-                                XposedHelpers.callMethod(syntheticLoc, "setLatitude", locProfile.latitude)
-                                XposedHelpers.callMethod(syntheticLoc, "setLongitude", locProfile.longitude)
-                                XposedHelpers.callMethod(syntheticLoc, "setAltitude", locProfile.altitude)
-                                XposedHelpers.callMethod(syntheticLoc, "setAccuracy", locProfile.accuracy)
-                                XposedHelpers.callMethod(syntheticLoc, "setSpeed", locProfile.speed)
-                                XposedHelpers.callMethod(syntheticLoc, "setBearing", locProfile.bearing)
-                                XposedHelpers.callMethod(syntheticLoc, "setTime", locProfile.timestamp)
-                                try {
-                                    XposedHelpers.callMethod(syntheticLoc, "setElapsedRealtimeNanos", locProfile.elapsedRealtimeNanos)
-                                } catch (_: Throwable) {}
-
-                                param.throwable = null
-                                param.result = syntheticLoc
-                            }
-                        } catch (_: Throwable) {
-                        } finally {
-                            isHookExecuting.set(false)
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        val providerName = param.args[0] as? String ?: "gps"
+                        val spoofedLoc = Location(providerName).apply {
+                            latitude = profile.latitude
+                            longitude = profile.longitude
+                            altitude = 15.0
+                            accuracy = 5.0f
+                            time = System.currentTimeMillis()
                         }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: LocationManager.getLastKnownLocation(String)")
+                        param.throwable = null
+                        param.result = spoofedLoc
 
-            // 5.2 Hook isProviderEnabled(String)
-            XposedHelpers.findAndHookMethod(
-                locationManagerClass,
-                "isProviderEnabled",
-                String::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (isHookExecuting.get() == true) return
-                        val provider = (param.args.getOrNull(0) as? String) ?: ""
-                        if (provider == "gps" || provider == "network" || provider == "fused") {
-                            param.result = true
-                            log("EVENT: VALUE_REPLACED | API: LocationManager.isProviderEnabled($provider) -> true")
-                        }
-                    }
-                }
-            )
-            log("EVENT: HOOK_REGISTERED | Hook: LocationManager.isProviderEnabled(String)")
+                        val logMsg = "[$TAG] [NPATCH HOOK] LocationManager.getLastKnownLocation('$providerName') -> (${profile.latitude}, ${profile.longitude}) [${profile.city}, ${profile.country}] in process='${lpparam.processName}' (PID $pid)"
+                        Log.i(TAG, logMsg)
+                        XposedBridge.log(logMsg)
 
-        } catch (e: Throwable) {
-            log("LocationManager hooks skipped: ${e.message}")
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // IPC Query Helper
-    // -------------------------------------------------------------------------
-    private fun queryIpcValue(cr: ContentResolver?, key: String): String? {
-        val resolver = cr ?: resolveContentResolver()
-        if (resolver == null) {
-            return null
-        }
-        return try {
-            val uri = NPatchConfig.PROVIDER_URI
-            resolver.query(uri, arrayOf(key), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val idx = cursor.getColumnIndex(key)
-                    if (idx >= 0) {
-                        cursor.getString(idx)
-                    } else null
-                } else null
-            }
-        } catch (e: Throwable) {
-            null
-        }
-    }
-
-    private fun queryLocationIpcProfile(cr: ContentResolver?): com.example.deviceidlab.model.LocationProfile? {
-        val resolver = cr ?: resolveContentResolver() ?: return null
-        return try {
-            val locUri = NPatchConfig.LOCATION_PROVIDER_URI
-            resolver.query(locUri, null, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val jsonIdx = cursor.getColumnIndex(NPatchConfig.KEY_LOC_JSON)
-                    if (jsonIdx >= 0) {
-                        val json = cursor.getString(jsonIdx)
-                        if (!json.isNullOrEmpty()) {
-                            try {
-                                val worldwide = com.example.deviceidlab.manager.LocationJsonSerializer.parseWorldwide(json)
-                                log("EVENT: VALUE_GENERATED | Worldwide Profile: ${worldwide.city}, ${worldwide.country} | Coords: ${worldwide.latitude}, ${worldwide.longitude} | TZ: ${worldwide.timezone} | Synthetic IP: ${worldwide.syntheticIp}")
-                                return@use worldwide.toLocationProfile()
-                            } catch (_: Throwable) {
-                                return@use com.example.deviceidlab.manager.LocationJsonSerializer.parse(json)
-                            }
-                        }
-                    }
-                    val latIdx = cursor.getColumnIndex(NPatchConfig.KEY_LOC_LATITUDE)
-                    val lngIdx = cursor.getColumnIndex(NPatchConfig.KEY_LOC_LONGITUDE)
-                    if (latIdx >= 0 && lngIdx >= 0) {
-                        val lat = cursor.getString(latIdx)?.toDoubleOrNull() ?: 0.0
-                        val lng = cursor.getString(lngIdx)?.toDoubleOrNull() ?: 0.0
-                        val alt = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_ALTITUDE).coerceAtLeast(0))?.toDoubleOrNull() ?: 0.0
-                        val acc = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_ACCURACY).coerceAtLeast(0))?.toFloatOrNull() ?: 5.0f
-                        val speed = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_SPEED).coerceAtLeast(0))?.toFloatOrNull() ?: 0.0f
-                        val bearing = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_BEARING).coerceAtLeast(0))?.toFloatOrNull() ?: 0.0f
-                        val provider = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_PROVIDER).coerceAtLeast(0)) ?: "gps"
-                        val profileId = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_PROFILE_ID).coerceAtLeast(0)) ?: "loc_ipc"
-                        val city = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_CITY).coerceAtLeast(0)) ?: "Unknown"
-                        val country = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_COUNTRY).coerceAtLeast(0)) ?: "Unknown"
-                        val synthIp = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_SYNTHETIC_IP).coerceAtLeast(0)) ?: "203.0.113.42"
-                        log("EVENT: VALUE_GENERATED | Location IPC: $city, $country ($lat, $lng) IP: $synthIp")
-                        return@use com.example.deviceidlab.model.LocationProfile(
-                            profileId = profileId,
-                            latitude = lat,
-                            longitude = lng,
-                            altitude = alt,
-                            accuracy = acc,
-                            speed = speed,
-                            bearing = bearing,
-                            provider = provider
+                        reportInterceptionEvent(
+                            resolver = resolver,
+                            targetPkg = lpparam.packageName,
+                            targetProc = lpparam.processName,
+                            targetPid = pid,
+                            apiName = "LocationManager.getLastKnownLocation($providerName)",
+                            identifierType = DeviceIdProvider.TYPE_LOCATION,
+                            origId = "Physical GPS",
+                            injectedId = "${profile.latitude},${profile.longitude} (${profile.city})",
+                            retId = "${profile.latitude},${profile.longitude}"
                         )
                     }
                 }
-                null
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on LocationManager.getLastKnownLocation()")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] LocationManager.getLastKnownLocation hook skipped: ${t.message}")
+        }
+
+        // Location.getLatitude()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.location.Location",
+                lpparam.classLoader,
+                "getLatitude",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        param.result = profile.latitude
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+
+        // Location.getLongitude()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.location.Location",
+                lpparam.classLoader,
+                "getLongitude",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        param.result = profile.longitude
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+    }
+
+    private fun hookNetworkMethods(lpparam: XC_LoadPackage.LoadPackageParam) {
+        val pid = try { android.os.Process.myPid() } catch (_: Throwable) { 0 }
+
+        // 1. NetworkInterface.getHardwareAddress()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "java.net.NetworkInterface",
+                lpparam.classLoader,
+                "getHardwareAddress",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        val originalBytes = param.result as? ByteArray
+                        val originalMac = NPatchConfig.byteArrayToMac(originalBytes)
+                        val testBytes = NPatchConfig.macToByteArray(profile.macAddress)
+                        param.result = testBytes
+                        val logMsg = "[$TAG] [NPATCH HOOK] NetworkInterface.getHardwareAddress() -> '${profile.macAddress}' (original: '$originalMac') in process='${lpparam.processName}' (PID $pid)"
+                        Log.i(TAG, logMsg)
+                        XposedBridge.log(logMsg)
+
+                        reportInterceptionEvent(
+                            resolver = resolver,
+                            targetPkg = lpparam.packageName,
+                            targetProc = lpparam.processName,
+                            targetPid = pid,
+                            apiName = "NetworkInterface.getHardwareAddress()",
+                            identifierType = DeviceIdProvider.TYPE_NETWORK_MAC,
+                            origId = originalMac,
+                            injectedId = profile.macAddress,
+                            retId = profile.macAddress
+                        )
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on NetworkInterface.getHardwareAddress()")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] NetworkInterface.getHardwareAddress() hook skipped: ${t.message}")
+        }
+
+        // 2. NetworkInterface.getInetAddresses()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "java.net.NetworkInterface",
+                lpparam.classLoader,
+                "getInetAddresses",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        try {
+                            val resolver = resolveContentResolver(null)
+                            val profile = queryDynamicProfile(resolver)
+                            val synthAddr = InetAddress.getByName(profile.syntheticIp)
+                            param.result = Collections.enumeration(listOf(synthAddr))
+                            val logMsg = "[$TAG] [NPATCH HOOK] NetworkInterface.getInetAddresses() -> RFC 5737 '${profile.syntheticIp}' in process='${lpparam.processName}' (PID $pid)"
+                            Log.i(TAG, logMsg)
+                            XposedBridge.log(logMsg)
+
+                            reportInterceptionEvent(
+                                resolver = resolver,
+                                targetPkg = lpparam.packageName,
+                                targetProc = lpparam.processName,
+                                targetPid = pid,
+                                apiName = "NetworkInterface.getInetAddresses()",
+                                identifierType = DeviceIdProvider.TYPE_NETWORK_IP,
+                                origId = "Local / System IP",
+                                injectedId = profile.syntheticIp,
+                                retId = profile.syntheticIp
+                            )
+                        } catch (_: Throwable) {}
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on NetworkInterface.getInetAddresses()")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] NetworkInterface.getInetAddresses() hook skipped: ${t.message}")
+        }
+
+        // 3. NetworkInterface.getInterfaceAddresses()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "java.net.NetworkInterface",
+                lpparam.classLoader,
+                "getInterfaceAddresses",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        Log.d(TAG, "[$TAG] [NPATCH HOOK] NetworkInterface.getInterfaceAddresses() intercepted")
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+
+        // 4. WifiInfo.getMacAddress()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.net.wifi.WifiInfo",
+                lpparam.classLoader,
+                "getMacAddress",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        val orig = param.result as? String ?: "02:00:00:00:00:00"
+                        param.result = profile.macAddress
+                        val logMsg = "[$TAG] [NPATCH HOOK] WifiInfo.getMacAddress() -> '${profile.macAddress}' (original: '$orig') in process='${lpparam.processName}'"
+                        Log.i(TAG, logMsg)
+                        XposedBridge.log(logMsg)
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on WifiInfo.getMacAddress()")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] WifiInfo.getMacAddress() hook skipped: ${t.message}")
+        }
+
+        // 5. WifiInfo.getIpAddress()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.net.wifi.WifiInfo",
+                lpparam.classLoader,
+                "getIpAddress",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        val origInt = param.result as? Int ?: 0
+                        val synthInt = NPatchConfig.ipToIntLittleEndian(profile.syntheticIp)
+                        param.result = synthInt
+                        val logMsg = "[$TAG] [NPATCH HOOK] WifiInfo.getIpAddress() -> '${profile.syntheticIp}' (int: $synthInt, original int: $origInt) in process='${lpparam.processName}'"
+                        Log.i(TAG, logMsg)
+                        XposedBridge.log(logMsg)
+                    }
+                }
+            )
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] Installed hook on WifiInfo.getIpAddress()")
+        } catch (t: Throwable) {
+            Log.d(TAG, "[$TAG] [NPATCH HOOK] WifiInfo.getIpAddress() hook skipped: ${t.message}")
+        }
+
+        // 6. WifiInfo.getSSID()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.net.wifi.WifiInfo",
+                lpparam.classLoader,
+                "getSSID",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        param.result = profile.wifiSsid
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+
+        // 7. WifiInfo.getBSSID()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.net.wifi.WifiInfo",
+                lpparam.classLoader,
+                "getBSSID",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        val resolver = resolveContentResolver(null)
+                        val profile = queryDynamicProfile(resolver)
+                        param.result = profile.wifiBssid
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+
+        // 8. LinkProperties.getAddresses()
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.net.LinkProperties",
+                lpparam.classLoader,
+                "getAddresses",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (!isInterceptionEnabled()) return
+                        try {
+                            val resolver = resolveContentResolver(null)
+                            val profile = queryDynamicProfile(resolver)
+                            val synthAddr = InetAddress.getByName(profile.syntheticIp)
+                            param.result = listOf(synthAddr)
+                        } catch (_: Throwable) {}
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+    }
+
+    private fun getOrInitXPrefs(): XSharedPreferences? {
+        if (xSharedPreferences == null) {
+            try {
+                xSharedPreferences = XSharedPreferences("com.example.deviceidlab", PREF_FILE).apply {
+                    makeWorldReadable()
+                    reload()
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "[$TAG] [NPATCH FAILURE] Lazy XSharedPreferences init warning: ${t.message}")
             }
-        } catch (e: Throwable) {
-            null
         }
+        return xSharedPreferences
     }
 
-    private fun resolveContentResolver(): ContentResolver? {
+    private fun resolveActiveAndroidId(): String? {
+        val inMemory = InterceptionBridge.activeSimulatedAndroidId.value
+        if (!inMemory.isNullOrEmpty()) return inMemory
+
         return try {
-            val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", null)
-            val currentApp = XposedHelpers.callStaticMethod(activityThreadClass, "currentApplication") as? Application
-            currentApp?.contentResolver
-        } catch (e: Throwable) {
+            val prefs = getOrInitXPrefs()
+            prefs?.reload()
+            val id = prefs?.getString(KEY_ACTIVE_ANDROID_ID, null)
+            if (!id.isNullOrEmpty()) id else null
+        } catch (t: Throwable) {
             null
         }
     }
 
-    private fun parseIpv4ToLittleEndianInt(ip: String?): Int {
-        if (ip.isNullOrEmpty()) return 0
-        val parts = ip.split(".")
-        if (parts.size != 4) return 0
-        val b0 = parts[0].toIntOrNull() ?: 0
-        val b1 = parts[1].toIntOrNull() ?: 0
-        val b2 = parts[2].toIntOrNull() ?: 0
-        val b3 = parts[3].toIntOrNull() ?: 0
-        return (b0 and 0xFF) or ((b1 and 0xFF) shl 8) or ((b2 and 0xFF) shl 16) or ((b3 and 0xFF) shl 24)
-    }
+    private fun resolveActiveTelephonyId(): String? {
+        val inMemory = InterceptionBridge.activeSimulatedTelephonyId.value
+        if (!inMemory.isNullOrEmpty()) return inMemory
 
-    private fun parseMacToBytes(mac: String?): ByteArray? {
-        if (mac.isNullOrEmpty()) return null
-        val clean = mac.replace(":", "").replace("-", "")
-        if (clean.length != 12) return null
         return try {
-            ByteArray(6) { i ->
-                clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
-            }
-        } catch (_: Throwable) {
+            val prefs = getOrInitXPrefs()
+            prefs?.reload()
+            val id = prefs?.getString(KEY_ACTIVE_TELEPHONY_ID, null)
+            if (!id.isNullOrEmpty()) id else null
+        } catch (t: Throwable) {
             null
         }
     }
 
-    private fun log(message: String) {
-        XposedBridge.log("[$TAG] $message")
-        Log.d(TAG, message)
+    private fun isInterceptionEnabled(): Boolean {
+        if (InterceptionBridge.isInterceptionActive.value) return true
+
+        return try {
+            val prefs = getOrInitXPrefs()
+            prefs?.reload()
+            prefs?.getBoolean(KEY_INTERCEPTION_ENABLED, true) ?: true
+        } catch (t: Throwable) {
+            true
+        }
     }
 }
 

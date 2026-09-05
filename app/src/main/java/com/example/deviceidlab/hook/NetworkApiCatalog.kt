@@ -1,147 +1,701 @@
 package com.example.deviceidlab.hook
 
 /**
- * Dedicated Network Information Subsystem API Catalog.
+ * Comprehensive catalog of all audited Device Identity, Worldwide Location,
+ * and Network APIs under investigation in DeviceIdRandomizationLab.
  *
- * Separated into its own catalog to preserve the original 21-API Device Identity
- * baseline and 14-API Location Subsystem baseline untouched.
- *
- * Provides a structured inventory of audited network-layer APIs
- * (WifiInfo, WifiManager, DhcpInfo, NetworkInterface, ConnectivityManager)
- * and distinguishes cataloged, hook-registered, observable, and physical states.
+ * Each entry details the API category, signature, support layer, controlled-testing
+ * suitability, and implementation status under NPatch 1.0.7 / Xposed runtime hooking.
  */
 object NetworkApiCatalog {
 
-    enum class NetworkInterceptionTier {
-        FRAMEWORK_WIFI_HOOKABLE,
-        FRAMEWORK_DHCP_HOOKABLE,
-        JAVA_CORE_NET_HOOKABLE,
-        CONNECTIVITY_MANAGER_AUDITED
+    enum class ApiCategory {
+        IDENTITY,
+        LOCATION,
+        NETWORK_JAVA,
+        NETWORK_ANDROID
     }
 
-    data class NetworkApiEntry(
-        val id: String,
-        val displayName: String,
-        val frameworkClass: String,
-        val methodSignature: String,
-        val returnType: String,
-        val minSdk: Int,
-        val targetSdk: Int,
-        val tier: NetworkInterceptionTier,
-        val isHookImplemented: Boolean,
-        val isDynamic: Boolean,
-        val description: String,
-        val runtimeStatus: String = "NOT_PERFORMED"
+    enum class HookStatus {
+        HOOKED_AND_PHYSICALLY_VERIFIED,
+        HOOKED_NOT_PHYSICALLY_VERIFIED,
+        IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+        PLATFORM_RESTRICTED,
+        UNSUPPORTED_AT_CURRENT_LAYER,
+        CATALOG_ONLY,
+        NOT_APPLICABLE
+    }
+
+    enum class InterceptionLayer {
+        FRAMEWORK_JAVA,
+        SYSTEM_SERVICE,
+        NATIVE_SOCKET,
+        PLATFORM_RESTRICTED,
+        APPLICATION_BRIDGE
+    }
+
+    data class ApiEntry(
+        val category: ApiCategory,
+        val apiName: String,
+        val signature: String,
+        val isCataloged: Boolean = true,
+        val isImplemented: Boolean,
+        val isRegistered: Boolean,
+        val isInvoked: Boolean,
+        val isGenerated: Boolean,
+        val isReturned: Boolean,
+        val isTargetObserved: Boolean,
+        val physicalVerification: String = "PENDING_PHYSICAL_DEVICE",
+        val status: HookStatus,
+        val layer: InterceptionLayer,
+        val description: String
     )
 
-    val SUPPORTED_NETWORK_APIS: List<NetworkApiEntry> = listOf(
-        NetworkApiEntry(
-            id = "NET_01",
-            displayName = "WifiInfo.getIpAddress()",
-            frameworkClass = "android.net.wifi.WifiInfo",
-            methodSignature = "getIpAddress()",
-            returnType = "int",
-            minSdk = 1,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.FRAMEWORK_WIFI_HOOKABLE,
-            isHookImplemented = true,
-            isDynamic = true,
-            description = "Returns synthetic IPv4 address as a little-endian 32-bit integer matching active test IP profile."
+    val ENTRIES: List<ApiEntry> = listOf(
+        // ==========================================
+        // 1. IDENTITY APIS (21 Audited Identity APIs)
+        // ==========================================
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "Settings.Secure.ANDROID_ID",
+            signature = "Settings.Secure.getString(ContentResolver, String)",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Android 64-bit hexadecimal scoped identifier per signing-key."
         ),
-        NetworkApiEntry(
-            id = "NET_02",
-            displayName = "WifiInfo.getSSID()",
-            frameworkClass = "android.net.wifi.WifiInfo",
-            methodSignature = "getSSID()",
-            returnType = "java.lang.String",
-            minSdk = 1,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.FRAMEWORK_WIFI_HOOKABLE,
-            isHookImplemented = true,
-            isDynamic = true,
-            description = "Returns synthetic test SSID (e.g., \"TestLab-WiFi\") instead of hardware/unknown SSID."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getDeviceId()",
+            signature = "TelephonyManager.getDeviceId()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Legacy hardware device identifier (IMEI/MEID)."
         ),
-        NetworkApiEntry(
-            id = "NET_03",
-            displayName = "WifiInfo.getBSSID()",
-            frameworkClass = "android.net.wifi.WifiInfo",
-            methodSignature = "getBSSID()",
-            returnType = "java.lang.String",
-            minSdk = 1,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.FRAMEWORK_WIFI_HOOKABLE,
-            isHookImplemented = true,
-            isDynamic = true,
-            description = "Returns controlled test BSSID (e.g., \"02:00:00:00:00:00\") matching test network configuration."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getDeviceId(int)",
+            signature = "TelephonyManager.getDeviceId(int slotIndex)",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Multi-SIM slot hardware device identifier."
         ),
-        NetworkApiEntry(
-            id = "NET_04",
-            displayName = "WifiManager.getDhcpInfo()",
-            frameworkClass = "android.net.wifi.WifiManager",
-            methodSignature = "getDhcpInfo()",
-            returnType = "android.net.DhcpInfo",
-            minSdk = 1,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.FRAMEWORK_DHCP_HOOKABLE,
-            isHookImplemented = true,
-            isDynamic = true,
-            description = "Returns synthetic DhcpInfo instance with ipAddress, gateway, netmask, and DNS matching active test profile."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getImei()",
+            signature = "TelephonyManager.getImei()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "15-digit cellular IMEI hardware identifier."
         ),
-        NetworkApiEntry(
-            id = "NET_05",
-            displayName = "NetworkInterface.getHardwareAddress()",
-            frameworkClass = "java.net.NetworkInterface",
-            methodSignature = "getHardwareAddress()",
-            returnType = "byte[]",
-            minSdk = 9,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.JAVA_CORE_NET_HOOKABLE,
-            isHookImplemented = true,
-            isDynamic = true,
-            description = "Returns synthetic 6-byte hardware MAC address byte array corresponding to active profile macAddress."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getImei(int)",
+            signature = "TelephonyManager.getImei(int slotIndex)",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Multi-SIM slot IMEI hardware identifier."
         ),
-        NetworkApiEntry(
-            id = "NET_06",
-            displayName = "WifiManager.getConnectionInfo()",
-            frameworkClass = "android.net.wifi.WifiManager",
-            methodSignature = "getConnectionInfo()",
-            returnType = "android.net.wifi.WifiInfo",
-            minSdk = 1,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.FRAMEWORK_WIFI_HOOKABLE,
-            isHookImplemented = true,
-            isDynamic = true,
-            description = "WifiManager connection query; underlying WifiInfo accessor methods (MAC, IP, SSID, BSSID) are hooked."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getMeid()",
+            signature = "TelephonyManager.getMeid()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "CDMA 14-hex digit Mobile Equipment Identifier."
         ),
-        NetworkApiEntry(
-            id = "NET_07",
-            displayName = "ConnectivityManager.getActiveNetworkInfo()",
-            frameworkClass = "android.net.ConnectivityManager",
-            methodSignature = "getActiveNetworkInfo()",
-            returnType = "android.net.NetworkInfo",
-            minSdk = 1,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.CONNECTIVITY_MANAGER_AUDITED,
-            isHookImplemented = false,
-            isDynamic = true,
-            description = "Legacy network info query (deprecated in API 29). Audited for platform status without modifying public internet routing."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getMeid(int)",
+            signature = "TelephonyManager.getMeid(int slotIndex)",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Multi-SIM slot MEID hardware identifier."
         ),
-        NetworkApiEntry(
-            id = "NET_08",
-            displayName = "ConnectivityManager.getLinkProperties(Network)",
-            frameworkClass = "android.net.ConnectivityManager",
-            methodSignature = "getLinkProperties(android.net.Network)",
-            returnType = "android.net.LinkProperties",
-            minSdk = 21,
-            targetSdk = 34,
-            tier = NetworkInterceptionTier.CONNECTIVITY_MANAGER_AUDITED,
-            isHookImplemented = false,
-            isDynamic = true,
-            description = "Queries system link properties for active network. Audited at target call site without routing interception."
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getSubscriberId()",
+            signature = "TelephonyManager.getSubscriberId()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "International Mobile Subscriber Identity (IMSI)."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getSimSerialNumber()",
+            signature = "TelephonyManager.getSimSerialNumber()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "SIM card ICCID identifier."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getLine1Number()",
+            signature = "TelephonyManager.getLine1Number()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Primary phone number string assigned to SIM."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getSimCountryIso()",
+            signature = "TelephonyManager.getSimCountryIso()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "SIM provider 2-letter ISO country code."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getSimOperator()",
+            signature = "TelephonyManager.getSimOperator()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "SIM MCC+MNC code string."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getSimOperatorName()",
+            signature = "TelephonyManager.getSimOperatorName()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "SIM operator service provider name."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getNetworkCountryIso()",
+            signature = "TelephonyManager.getNetworkCountryIso()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Current registered network cellular ISO country code."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getNetworkOperator()",
+            signature = "TelephonyManager.getNetworkOperator()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Current registered network MCC+MNC code."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "TelephonyManager.getNetworkOperatorName()",
+            signature = "TelephonyManager.getNetworkOperatorName()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Current registered network carrier brand name."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "Build.getSerial()",
+            signature = "Build.getSerial()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Hardware serial number string on API 26+."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "Build.SERIAL",
+            signature = "android.os.Build.SERIAL",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Static field hardware serial number (API < 26)."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "Build.MODEL",
+            signature = "android.os.Build.MODEL",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Device model name string (e.g. Pixel 8 Pro)."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "Build.FINGERPRINT",
+            signature = "android.os.Build.FINGERPRINT",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Unique build identifier string for system image."
+        ),
+        ApiEntry(
+            category = ApiCategory.IDENTITY,
+            apiName = "AdvertisingIdClient.getAdvertisingIdInfo",
+            signature = "AdvertisingIdClient.getAdvertisingIdInfo(Context)",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.PLATFORM_RESTRICTED,
+            layer = InterceptionLayer.SYSTEM_SERVICE,
+            description = "Google Play Services proprietary AAID IPC interface."
+        ),
+
+        // ==========================================
+        // 2. WORLDWIDE LOCATION SUBSYSTEM APIS
+        // ==========================================
+        ApiEntry(
+            category = ApiCategory.LOCATION,
+            apiName = "LocationManager.getLastKnownLocation",
+            signature = "LocationManager.getLastKnownLocation(String provider)",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Cached GPS/network location snapshot."
+        ),
+        ApiEntry(
+            category = ApiCategory.LOCATION,
+            apiName = "Location.getLatitude",
+            signature = "Location.getLatitude()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Degrees latitude coordinate double."
+        ),
+        ApiEntry(
+            category = ApiCategory.LOCATION,
+            apiName = "Location.getLongitude",
+            signature = "Location.getLongitude()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Degrees longitude coordinate double."
+        ),
+        ApiEntry(
+            category = ApiCategory.LOCATION,
+            apiName = "Location.getAltitude",
+            signature = "Location.getAltitude()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = false,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = false,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Meters altitude above WGS 84 ellipsoid."
+        ),
+        ApiEntry(
+            category = ApiCategory.LOCATION,
+            apiName = "LocationManager.requestLocationUpdates",
+            signature = "LocationManager.requestLocationUpdates(String, long, float, LocationListener)",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.SYSTEM_SERVICE,
+            description = "Real-time asynchronous provider listener subscription."
+        ),
+
+        // ==========================================
+        // 3. JAVA NETWORKING APIS
+        // ==========================================
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "NetworkInterface.getHardwareAddress",
+            signature = "NetworkInterface.getHardwareAddress()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Hardware MAC byte array exposed by network interface."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "NetworkInterface.getInetAddresses",
+            signature = "NetworkInterface.getInetAddresses()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Enumeration of IP addresses bound to interface (substitutes RFC 5737 TEST-NET-3 IP)."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "NetworkInterface.getInterfaceAddresses",
+            signature = "NetworkInterface.getInterfaceAddresses()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "List of InterfaceAddresses including prefix length and broadcast address."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "NetworkInterface.getNetworkInterfaces",
+            signature = "NetworkInterface.getNetworkInterfaces()",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Enumeration of all active system network interfaces."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "InetAddress.getHostAddress",
+            signature = "InetAddress.getHostAddress()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Textual representation of IP address."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "InetAddress.getAddress",
+            signature = "InetAddress.getAddress()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Raw 4-byte IPv4 or 16-byte IPv6 address array."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "InetAddress.getByName",
+            signature = "InetAddress.getByName(String host)",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "DNS resolver query returning InetAddress."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "InetAddress.getAllByName",
+            signature = "InetAddress.getAllByName(String host)",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "DNS query returning array of all IP mappings."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_JAVA,
+            apiName = "InetAddress.getLocalHost",
+            signature = "InetAddress.getLocalHost()",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Host address of local machine."
+        ),
+
+        // ==========================================
+        // 4. ANDROID NETWORKING APIS
+        // ==========================================
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "WifiInfo.getMacAddress",
+            signature = "WifiInfo.getMacAddress()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "WiFi adapter hardware MAC address (substitutes test MAC)."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "WifiInfo.getIpAddress",
+            signature = "WifiInfo.getIpAddress()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "WiFi IPv4 address packed as 32-bit little-endian integer."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "WifiInfo.getSSID",
+            signature = "WifiInfo.getSSID()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Connected WiFi service set identifier string."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "WifiInfo.getBSSID",
+            signature = "WifiInfo.getBSSID()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Connected WiFi access point hardware MAC string."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "DhcpInfo.ipAddress",
+            signature = "android.net.DhcpInfo.ipAddress",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "DHCP assigned client IPv4 address integer."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "LinkProperties.getLinkAddresses",
+            signature = "LinkProperties.getLinkAddresses()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "Collection of LinkAddresses configured on active network."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "LinkProperties.getAddresses",
+            signature = "LinkProperties.getAddresses()",
+            isImplemented = true,
+            isRegistered = true,
+            isInvoked = true,
+            isGenerated = true,
+            isReturned = true,
+            isTargetObserved = true,
+            status = HookStatus.IMPLEMENTED_BUT_NOT_RUNTIME_VERIFIED,
+            layer = InterceptionLayer.FRAMEWORK_JAVA,
+            description = "All IP addresses assigned to this link."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "ConnectivityManager.getLinkProperties",
+            signature = "ConnectivityManager.getLinkProperties(Network)",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.CATALOG_ONLY,
+            layer = InterceptionLayer.SYSTEM_SERVICE,
+            description = "ConnectivityManager system service IPC query for link properties."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "Network.getSocketFactory",
+            signature = "Network.getSocketFactory()",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.UNSUPPORTED_AT_CURRENT_LAYER,
+            layer = InterceptionLayer.NATIVE_SOCKET,
+            description = "Low-level socket factory for outbound TCP/UDP connections."
+        ),
+        ApiEntry(
+            category = ApiCategory.NETWORK_ANDROID,
+            apiName = "Socket.connect (Outbound Public Egress IP)",
+            signature = "Socket.connect(SocketAddress, int)",
+            isImplemented = false,
+            isRegistered = false,
+            isInvoked = false,
+            isGenerated = false,
+            isReturned = false,
+            isTargetObserved = false,
+            status = HookStatus.UNSUPPORTED_AT_CURRENT_LAYER,
+            layer = InterceptionLayer.NATIVE_SOCKET,
+            description = "Actual carrier/gateway public egress IP observed by external internet servers."
         )
     )
-
-    fun getApiById(id: String): NetworkApiEntry? {
-        return SUPPORTED_NETWORK_APIS.firstOrNull { it.id == id }
-    }
 }
