@@ -31,9 +31,9 @@ class TargetDemoActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(com.example.deviceidlab.demo.R.layout.activity_target_demo)
+        setContentView(R.layout.activity_target_demo)
 
-        val btnReinvoke = findViewById<Button>(com.example.deviceidlab.demo.R.id.btn_reinvoke_all)
+        val btnReinvoke = findViewById<Button>(R.id.btn_reinvoke_all)
         btnReinvoke?.setOnClickListener {
             runAuditedVerification()
         }
@@ -42,7 +42,7 @@ class TargetDemoActivity : Activity() {
     }
 
     private fun runAuditedVerification() {
-        val resultsContainer = findViewById<LinearLayout>(com.example.deviceidlab.demo.R.id.layout_test_results) ?: return
+        val resultsContainer = findViewById<LinearLayout>(R.id.layout_test_results) ?: return
         resultsContainer.removeAllViews()
 
         val tests = mutableListOf<TestResult>()
