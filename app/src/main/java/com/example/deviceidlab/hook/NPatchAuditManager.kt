@@ -14,7 +14,8 @@ data class HookAuditEvent(
     val apiName: String,
     val originalId: String = "",
     val injectedId: String = "",
-    val returnedId: String = ""
+    val returnedId: String = "",
+    val stage: String = NPatchAuditManager.HOOK_INVOKED
 )
 
 data class NPatchVerificationAudit(
@@ -26,7 +27,8 @@ data class NPatchVerificationAudit(
     val canaryStatus: String,
     val lastHookTimestamp: Long,
     val finalResult: String,
-    val isVerified: Boolean
+    val isVerified: Boolean,
+    val currentStage: String = NPatchAuditManager.TARGET_OBSERVED
 )
 
 /**
@@ -35,6 +37,14 @@ data class NPatchVerificationAudit(
  */
 object NPatchAuditManager {
     private const val TAG = "NPatchAuditManager"
+
+    // 5-Stage Verification Lifecycle States
+    const val HOOK_REGISTERED = "HOOK_REGISTERED"
+    const val HOOK_INVOKED = "HOOK_INVOKED"
+    const val VALUE_GENERATED = "VALUE_GENERATED"
+    const val VALUE_RETURNED = "VALUE_RETURNED"
+    const val TARGET_OBSERVED = "TARGET_OBSERVED"
+
     private val auditEvents = mutableListOf<HookAuditEvent>()
 
     @Synchronized
@@ -49,7 +59,8 @@ object NPatchAuditManager {
         apiName: String,
         originalId: String = "",
         injectedId: String = "",
-        returnedId: String = ""
+        returnedId: String = "",
+        stage: String = HOOK_INVOKED
     ) {
         val event = HookAuditEvent(
             targetPackage = targetPackage,
@@ -61,7 +72,8 @@ object NPatchAuditManager {
             apiName = apiName,
             originalId = originalId,
             injectedId = injectedId,
-            returnedId = returnedId
+            returnedId = returnedId,
+            stage = stage
         )
         auditEvents.add(event)
         if (auditEvents.size > 200) {
