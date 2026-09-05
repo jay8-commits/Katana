@@ -151,19 +151,72 @@ export function generateTelephonyTestId(identityNumber: number): string {
   return rawNum;
 }
 
+const PHONE_NUMBER_SALT = 'PhoneNumber_Deterministic_Salt_Lab_v1_';
+const BATTERY_HEALTH_SALT = 'BatteryHealth_Deterministic_Salt_Lab_v1_';
+
 /**
- * Creates a full DeviceIdentity for the specified identity number.
+ * Generates a deterministic synthetic phone number (+1 (555) XXX-XXXX)
+ * for the given identity index.
  */
-export function createIdentity(identityNumber: number, createdAt: number = Date.now()): {
+export function generateSyntheticPhoneNumber(identityNumber: number): string {
+  const input = `${PHONE_NUMBER_SALT}${identityNumber}`;
+  const digest = sha256(input);
+  const prefix = 100 + ((digest[0] << 8 | digest[1]) % 900);
+  const lineNum = 1000 + ((digest[2] << 8 | digest[3]) % 9000);
+  return `+1 (555) ${prefix}-${lineNum}`;
+}
+
+/**
+ * Generates a realistic battery health percentage (60% - 99%)
+ * for the given identity index, ensuring difference from previous if provided.
+ */
+export function generateBatteryHealth(identityNumber: number, previousHealth?: number): number {
+  const input = `${BATTERY_HEALTH_SALT}${identityNumber}`;
+  const digest = sha256(input);
+  let health = 60 + (digest[0] % 40); // 60%..99%
+  if (previousHealth !== undefined && health === previousHealth) {
+    health = health >= 99 ? 75 : health + 1;
+  }
+  return health;
+}
+
+/**
+ * Creates a full DeviceIdentity for the specified identity number,
+ * binding Fingerprint, Android ID, Phone Number, and Battery Health together.
+ */
+export function createIdentity(
+  identityNumber: number,
+  createdAt: number = Date.now(),
+  previousHealth?: number
+): {
   identityNumber: number;
   androidTestId: string;
   telephonyTestId: string;
+  syntheticPhoneNumber: string;
+  batteryHealth: number;
+  fingerprint: string;
   createdAt: number;
 } {
+  const androidTestId = generateAndroidTestId(identityNumber);
+  const telephonyTestId = generateTelephonyTestId(identityNumber);
+  const syntheticPhoneNumber = generateSyntheticPhoneNumber(identityNumber);
+  const batteryHealth = generateBatteryHealth(identityNumber, previousHealth);
+
+  // Compute profile fingerprint binding all 4 fields into the SAME profile
+  const rawData = `${identityNumber}:${androidTestId}:${telephonyTestId}:${syntheticPhoneNumber}:${batteryHealth}`;
+  const digest = sha256(rawData);
+  let fingerprint = '';
+  for (let i = 0; i < 16; i++) {
+    fingerprint += digest[i].toString(16).padStart(2, '0');
+  }
+
   return {
     identityNumber,
-    androidTestId: generateAndroidTestId(identityNumber),
-    telephonyTestId: generateTelephonyTestId(identityNumber),
+    androidTestId,
+    telephonyTestId,
+    syntheticPhoneNumber,
+    batteryHealth,
+    fingerprint,
     createdAt
   };
 }

@@ -34,11 +34,21 @@ class DeviceIdProvider : ContentProvider() {
 
         Log.d(TAG, "IPC Query received for URI: $uri, returning profile: ${profile.name}, Android ID: ${profile.androidId}")
 
+        val previousProfile = manager.getPreviousProfile()
+        val uniquenessStatus = manager.getProfileUniquenessStatus()
+        val consistencyStatus = manager.getProfileConsistencyStatus()
+        val ipStatus = manager.getIpProfileStatus()
+
         val columns = arrayOf(
             "androidId", "imei", "serialNumber", "macAddress",
             "buildModel", "buildManufacturer", "buildBrand",
             "buildProduct", "buildDevice", "buildFingerprint",
+            "phoneNumber", "batteryHealth", "testIpv4",
             "profileId", "profileName", "profileFingerprint", "profileState",
+            "profileUniqueness", "profileConsistency", "ipProfileStatus", "ipProfileValue",
+            "previousProfileId", "previousFingerprint",
+            "previousAndroidId", "previousPhoneNumber", "previousBatteryHealth", "previousTestIpv4",
+            "atomicIntegrity",
             "createdAt", "consumedAt", "activationResult", "consumptionResult"
         )
         val cursor = MatrixCursor(columns)
@@ -54,10 +64,24 @@ class DeviceIdProvider : ContentProvider() {
                 profile.buildProduct,
                 profile.buildDevice,
                 profile.buildFingerprint,
+                profile.phoneNumber,
+                profile.batteryHealth.toString(),
+                profile.testIpv4,
                 profile.id,
                 profile.name,
                 profile.computeFingerprint(),
                 profile.state.name,
+                uniquenessStatus,
+                consistencyStatus,
+                ipStatus,
+                profile.testIpv4,
+                previousProfile?.id ?: "",
+                previousProfile?.computeFingerprint() ?: "",
+                previousProfile?.androidId ?: "",
+                previousProfile?.phoneNumber ?: "",
+                previousProfile?.batteryHealth?.toString() ?: "",
+                previousProfile?.testIpv4 ?: "",
+                "ALL_FIELDS_ATOMICALLY_BOUND",
                 profile.createdAt.toString(),
                 (profile.consumedAt ?: 0L).toString(),
                 "SUCCESS",

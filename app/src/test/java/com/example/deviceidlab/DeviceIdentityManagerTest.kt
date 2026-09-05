@@ -325,6 +325,248 @@ class DeviceIdentityManagerTest {
         assertTrue(reason.startsWith("METHOD_NOT_AVAILABLE") || reason == "AVAILABLE")
     }
 
+    @Test
+    fun testProfileUniquenessAcrossFourFields() {
+        val manager = DeviceIdentityManager(mockContext)
+
+        // Profile #1
+        val p1 = manager.generateAvailableProfile("Profile #1")
+        val res1 = manager.applyAndActivateProfile(p1)
+        assertTrue(res1.success)
+        val active1 = manager.getActiveProfile()
+
+        // Profile #2
+        val p2 = manager.generateAvailableProfile("Profile #2")
+        val res2 = manager.applyAndActivateProfile(p2)
+        assertTrue(res2.success)
+        val active2 = manager.getActiveProfile()
+
+        // Profile #3
+        val p3 = manager.generateAvailableProfile("Profile #3")
+        val res3 = manager.applyAndActivateProfile(p3)
+        assertTrue(res3.success)
+        val active3 = manager.getActiveProfile()
+
+        // Verify Profile #2 differs from Profile #1 in ALL 5 required fields
+        assertNotEquals("Fingerprint must be different", active1.computeFingerprint(), active2.computeFingerprint())
+        assertNotEquals("Android ID must be different", active1.androidId, active2.androidId)
+        assertNotEquals("Phone Number must be different", active1.phoneNumber, active2.phoneNumber)
+        assertNotEquals("Battery Health must be different", active1.batteryHealth, active2.batteryHealth)
+        assertNotEquals("Test IPv4 must be different", active1.testIpv4, active2.testIpv4)
+
+        // Verify Profile #3 differs from Profile #2 in ALL 5 required fields
+        assertNotEquals("Fingerprint must be different", active2.computeFingerprint(), active3.computeFingerprint())
+        assertNotEquals("Android ID must be different", active2.androidId, active3.androidId)
+        assertNotEquals("Phone Number must be different", active2.phoneNumber, active3.phoneNumber)
+        assertNotEquals("Battery Health must be different", active2.batteryHealth, active3.batteryHealth)
+        assertNotEquals("Test IPv4 must be different", active2.testIpv4, active3.testIpv4)
+
+        // Verify that the manager reports PROFILE UNIQUENESS: PASS and PROFILE CONSISTENCY: PASS
+        assertEquals("PROFILE UNIQUENESS: PASS", "PASS", manager.getProfileUniquenessStatus())
+        assertEquals("PROFILE CONSISTENCY: PASS", "PASS", manager.getProfileConsistencyStatus())
+        assertEquals("IP PROFILE STATUS: PASS", "PASS", manager.getIpProfileStatus())
+    }
+
+    @Test
+    fun testAutomatedUniquenessRejectionIfAnyFieldMatches() {
+        val manager = DeviceIdentityManager(mockContext)
+        val p1 = manager.generateAvailableProfile("Base Profile")
+        manager.applyAndActivateProfile(p1)
+
+        // Candidate sharing Fingerprint
+        val dupFingerprint = p1.copy(
+            id = "new_id_1",
+            state = ProfileState.AVAILABLE
+        )
+        assertFalse("Must reject if fingerprint matches", RandomIdGenerator.validateProfileUniqueness(dupFingerprint, p1))
+
+        // Candidate sharing Android ID
+        val dupAndroidId = RandomIdGenerator.generateProfile("Candidate").copy(
+            androidId = p1.androidId,
+            phoneNumber = "+1 (555) 999-0001",
+            batteryHealth = 55,
+            testIpv4 = "192.0.2.200"
+        )
+        assertFalse("Must reject if androidId matches", RandomIdGenerator.validateProfileUniqueness(dupAndroidId, p1))
+
+        // Candidate sharing Phone Number
+        val dupPhone = RandomIdGenerator.generateProfile("Candidate").copy(
+            androidId = "ffffffffffffffff",
+            phoneNumber = p1.phoneNumber,
+            batteryHealth = 55,
+            testIpv4 = "192.0.2.201"
+        )
+        assertFalse("Must reject if phoneNumber matches", RandomIdGenerator.validateProfileUniqueness(dupPhone, p1))
+
+        // Candidate sharing Battery Health
+        val dupBattery = RandomIdGenerator.generateProfile("Candidate").copy(
+            androidId = "ffffffffffffffff",
+            phoneNumber = "+1 (555) 999-0002",
+            batteryHealth = p1.batteryHealth,
+            testIpv4 = "192.0.2.202"
+        )
+        assertFalse("Must reject if batteryHealth matches", RandomIdGenerator.validateProfileUniqueness(dupBattery, p1))
+
+        // Candidate sharing Test IPv4
+        val dupIpv4 = RandomIdGenerator.generateProfile("Candidate").copy(
+            androidId = "eeeeeeeeeeeeeeee",
+            phoneNumber = "+1 (555) 999-0003",
+            batteryHealth = 50,
+            testIpv4 = p1.testIpv4
+        )
+        assertFalse("Must reject if testIpv4 matches", RandomIdGenerator.validateProfileUniqueness(dupIpv4, p1))
+
+        // Attempting to activate any non-unique candidate must be rejected by applyAndActivateProfile
+        val activationResult = manager.applyAndActivateProfile(dupIpv4)
+        assertFalse(activationResult.success)
+        assertTrue(activationResult.wasRejected)
+        assertEquals("PROFILE_UNIQUENESS_FAILED", activationResult.rejectionReason)
+    }
+
+    @Test
+    fun testAtomicProfileSwitchingNoMixedState() {
+        val manager = DeviceIdentityManager(mockContext)
+
+        val p1 = DeviceProfile(
+            id = "profile_alpha",
+            name = "Alpha",
+            androidId = "1111111111111111",
+            imei = "864201041111111",
+            serialNumber = "SERIAL1111",
+            macAddress = "02:00:00:11:11:11",
+            buildModel = "Pixel 7",
+            buildManufacturer = "Google",
+            buildBrand = "google",
+            buildProduct = "panther",
+            buildDevice = "panther",
+            buildFingerprint = "fp_1",
+            phoneNumber = "+1 (555) 111-1111",
+            batteryHealth = 95,
+            testIpv4 = "192.0.2.101",
+            state = ProfileState.AVAILABLE
+        )
+        val p2 = DeviceProfile(
+            id = "profile_beta",
+            name = "Beta",
+            androidId = "2222222222222222",
+            imei = "864201042222222",
+            serialNumber = "SERIAL2222",
+            macAddress = "02:00:00:22:22:22",
+            buildModel = "Galaxy S23",
+            buildManufacturer = "Samsung",
+            buildBrand = "samsung",
+            buildProduct = "dm1q",
+            buildDevice = "dm1q",
+            buildFingerprint = "fp_2",
+            phoneNumber = "+1 (555) 222-2222",
+            batteryHealth = 82,
+            testIpv4 = "192.0.2.187",
+            state = ProfileState.AVAILABLE
+        )
+
+        // Activate Alpha
+        manager.applyAndActivateProfile(p1)
+        val active1 = manager.getActiveProfile()
+        assertEquals("1111111111111111", active1.androidId)
+        assertEquals("+1 (555) 111-1111", active1.phoneNumber)
+        assertEquals(95, active1.batteryHealth)
+        assertEquals("192.0.2.101", active1.testIpv4)
+
+        // Atomically switch to Beta
+        val switchResult = manager.applyAndActivateProfile(p2)
+        assertTrue(switchResult.success)
+
+        val active2 = manager.getActiveProfile()
+        // Ensure all fields switched together with NO partial or mixed values
+        assertEquals("Beta", active2.name)
+        assertEquals("2222222222222222", active2.androidId)
+        assertEquals("+1 (555) 222-2222", active2.phoneNumber)
+        assertEquals(82, active2.batteryHealth)
+        assertEquals("192.0.2.187", active2.testIpv4)
+        assertEquals("SERIAL2222", active2.serialNumber)
+
+        // Previous profile record holds exact pre-switch values
+        val prev = manager.getPreviousProfile()
+        assertNotNull(prev)
+        assertEquals("Alpha", prev!!.name)
+        assertEquals("1111111111111111", prev.androidId)
+        assertEquals("+1 (555) 111-1111", prev.phoneNumber)
+        assertEquals(95, prev.batteryHealth)
+        assertEquals("192.0.2.101", prev.testIpv4)
+
+        assertEquals("PASS", manager.getProfileUniquenessStatus())
+        assertEquals("PASS", manager.getProfileConsistencyStatus())
+        assertEquals("PASS", manager.getIpProfileStatus())
+    }
+
+    @Test
+    fun testProfileConsistencyVerification() {
+        val manager = DeviceIdentityManager(mockContext)
+
+        // Profile with all 5 valid attributes
+        val p = DeviceProfile(
+            id = "profile_consistent",
+            name = "Consistent Profile",
+            androidId = "1234567890abcdef",
+            imei = "864201041234567",
+            serialNumber = "SERIAL_CONSIST",
+            macAddress = "02:00:00:12:34:56",
+            buildModel = "Pixel 7",
+            buildManufacturer = "Google",
+            buildBrand = "google",
+            buildProduct = "panther",
+            buildDevice = "panther",
+            buildFingerprint = "google/panther:13/TQ3A:user/release-keys",
+            phoneNumber = "+1 (555) 345-6789",
+            batteryHealth = 76,
+            testIpv4 = "192.0.2.224",
+            state = ProfileState.AVAILABLE
+        )
+
+        manager.applyAndActivateProfile(p)
+
+        assertEquals("PROFILE CONSISTENCY: PASS", "PASS", manager.getProfileConsistencyStatus())
+        assertEquals("IP PROFILE STATUS: PASS", "PASS", manager.getIpProfileStatus())
+        assertEquals("192.0.2.224", manager.getActiveProfile().testIpv4)
+        assertTrue("Test IPv4 must belong to RFC 5737 TEST-NET documentation range",
+            manager.isValidSyntheticIpv4(manager.getActiveProfile().testIpv4))
+    }
+
+    @Test
+    fun testProfileSerializationPreservesAllFields() {
+        val original = DeviceProfile(
+            id = "test_ser_all_fields",
+            name = "Serializer Test",
+            androidId = "deadbeef12345678",
+            imei = "359876543210987",
+            serialNumber = "SRL987654",
+            macAddress = "02:00:00:99:88:77",
+            buildModel = "TestModel",
+            buildManufacturer = "TestMfr",
+            buildBrand = "testbrand",
+            buildProduct = "testproduct",
+            buildDevice = "testdevice",
+            buildFingerprint = "test/fingerprint/v1:user/release-keys",
+            phoneNumber = "+1 (555) 777-8888",
+            batteryHealth = 76,
+            testIpv4 = "198.51.100.42",
+            state = ProfileState.CONSUMED,
+            consumedAt = 1700000000000L
+        )
+
+        val json = com.example.deviceidlab.manager.ProfileJsonSerializer.serialize(original)
+        assertTrue(json.contains("\"phoneNumber\":\"+1 (555) 777-8888\""))
+        assertTrue(json.contains("\"batteryHealth\":76"))
+        assertTrue(json.contains("\"testIpv4\":\"198.51.100.42\""))
+
+        val parsed = com.example.deviceidlab.manager.ProfileJsonSerializer.parse(json)
+        assertEquals(original.id, parsed.id)
+        assertEquals(original.phoneNumber, parsed.phoneNumber)
+        assertEquals(original.batteryHealth, parsed.batteryHealth)
+        assertEquals(original.testIpv4, parsed.testIpv4)
+        assertEquals(original.computeFingerprint(), parsed.computeFingerprint())
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // IN-MEMORY MOCKS FOR UNIT TESTING WITHOUT ANDROID RUNTIME FRAMEWORK
     // ──────────────────────────────────────────────────────────────────────────

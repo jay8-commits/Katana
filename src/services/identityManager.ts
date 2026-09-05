@@ -3,6 +3,7 @@ import { createIdentity } from '../utils/crypto';
 
 const STORAGE_KEY_USED_IDS = 'device_id_lab_used_ids';
 const STORAGE_KEY_LATEST_ID = 'device_id_lab_latest_id';
+const STORAGE_KEY_PREVIOUS_ID = 'device_id_lab_previous_id';
 const MAX_POOL_CAPACITY = 1000000;
 const MAX_RANDOM_COLLISION_RETRIES = 25;
 const DETERMINISTIC_FALLBACK_THRESHOLD = 999990;
@@ -11,6 +12,7 @@ export class DeviceIdentityManager {
   private static instance: DeviceIdentityManager;
   private usedIdsSet: Set<number> = new Set();
   private latestIdentity: DeviceIdentity | null = null;
+  private previousIdentity: DeviceIdentity | null = null;
   private subscribers: Array<() => void> = [];
 
   private constructor() {
@@ -35,10 +37,15 @@ export class DeviceIdentityManager {
       if (rawLatest) {
         this.latestIdentity = JSON.parse(rawLatest) as DeviceIdentity;
       }
+      const rawPrev = localStorage.getItem(STORAGE_KEY_PREVIOUS_ID);
+      if (rawPrev) {
+        this.previousIdentity = JSON.parse(rawPrev) as DeviceIdentity;
+      }
     } catch (e) {
       console.error('Failed to load identities from localStorage:', e);
       this.usedIdsSet = new Set();
       this.latestIdentity = null;
+      this.previousIdentity = null;
     }
   }
 
@@ -51,6 +58,11 @@ export class DeviceIdentityManager {
         localStorage.setItem(STORAGE_KEY_LATEST_ID, JSON.stringify(this.latestIdentity));
       } else {
         localStorage.removeItem(STORAGE_KEY_LATEST_ID);
+      }
+      if (this.previousIdentity) {
+        localStorage.setItem(STORAGE_KEY_PREVIOUS_ID, JSON.stringify(this.previousIdentity));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_PREVIOUS_ID);
       }
     } catch (e) {
       console.warn('Storage limit reached or failed saving:', e);
@@ -70,6 +82,22 @@ export class DeviceIdentityManager {
 
   public getCurrentIdentity(): DeviceIdentity | null {
     return this.latestIdentity;
+  }
+
+  public getPreviousIdentity(): DeviceIdentity | null {
+    return this.previousIdentity;
+  }
+
+  public getProfileUniquenessStatus(): 'PASS' | 'INITIAL_PROFILE' | 'FAILED' {
+    if (!this.previousIdentity) return 'INITIAL_PROFILE';
+    if (!this.latestIdentity) return 'INITIAL_PROFILE';
+
+    const fpDiff = this.latestIdentity.fingerprint !== this.previousIdentity.fingerprint;
+    const androidIdDiff = this.latestIdentity.androidTestId !== this.previousIdentity.androidTestId;
+    const phoneDiff = this.latestIdentity.syntheticPhoneNumber !== this.previousIdentity.syntheticPhoneNumber;
+    const batteryDiff = this.latestIdentity.batteryHealth !== this.previousIdentity.batteryHealth;
+
+    return (fpDiff && androidIdDiff && phoneDiff && batteryDiff) ? 'PASS' : 'FAILED';
   }
 
   public getUsedCount(): number {
@@ -119,9 +147,38 @@ export class DeviceIdentityManager {
       };
     }
 
-    // 3. Construct deterministic identity & persist
-    const identity = createIdentity(candidateIndex);
+    // 3. Construct deterministic identity with uniqueness validation
+    const candidateIdentity = createIdentity(
+      candidateIndex,
+      Date.now(),
+      this.latestIdentity?.batteryHealth
+    );
+
+    // Automated uniqueness validation against previous profile:
+    if (this.latestIdentity) {
+      const isUnique =
+        candidateIdentity.fingerprint !== this.latestIdentity.fingerprint &&
+        candidateIdentity.androidTestId !== this.latestIdentity.androidTestId &&
+        candidateIdentity.syntheticPhoneNumber !== this.latestIdentity.syntheticPhoneNumber &&
+        candidateIdentity.batteryHealth !== this.latestIdentity.batteryHealth;
+
+      if (!isUnique) {
+        // Fallback or retry index
+        const nextIndex = this.findFirstUnusedIndex();
+        if (nextIndex !== null) {
+          candidateIndex = nextIndex;
+        }
+      }
+    }
+
+    const identity = createIdentity(
+      candidateIndex,
+      Date.now(),
+      this.latestIdentity?.batteryHealth
+    );
+
     this.usedIdsSet.add(candidateIndex);
+    this.previousIdentity = this.latestIdentity;
     this.latestIdentity = identity;
     this.saveToStorage();
     this.notify();

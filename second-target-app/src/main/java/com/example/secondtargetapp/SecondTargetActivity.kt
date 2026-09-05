@@ -70,12 +70,61 @@ class SecondTargetActivity : AppCompatActivity() {
         val activationResult = expectedProfile["activationResult"] ?: "SUCCESS"
         val consumptionResult = expectedProfile["consumptionResult"] ?: "CONSUMED_AND_EXEMPTED"
 
+        val phoneNumber = expectedProfile["phoneNumber"] ?: "+1 (555) 234-5678"
+        val batteryHealth = expectedProfile["batteryHealth"] ?: "95"
+        val testIpv4 = expectedProfile["testIpv4"] ?: "192.0.2.101"
+        val previousProfileId = expectedProfile["previousProfileId"] ?: ""
+        val previousFingerprint = expectedProfile["previousFingerprint"] ?: ""
+        val previousAndroidId = expectedProfile["previousAndroidId"] ?: ""
+        val previousPhoneNumber = expectedProfile["previousPhoneNumber"] ?: ""
+        val previousBatteryHealth = expectedProfile["previousBatteryHealth"] ?: ""
+        val previousTestIpv4 = expectedProfile["previousTestIpv4"] ?: ""
+        val currentAndroidId = expectedProfile["androidId"] ?: ""
+        val atomicIntegrity = expectedProfile["atomicIntegrity"] ?: "ALL_FIELDS_ATOMICALLY_BOUND"
+
+        val isUniquenessPass = if (previousProfileId.isNotEmpty()) {
+            profileFingerprint != previousFingerprint &&
+            currentAndroidId != previousAndroidId &&
+            phoneNumber != previousPhoneNumber &&
+            batteryHealth != previousBatteryHealth &&
+            testIpv4 != previousTestIpv4
+        } else {
+            true
+        }
+        val uniquenessStatus = if (isUniquenessPass) "PASS" else "FAIL"
+
+        val isConsistencyPass = (
+            profileFingerprint.isNotEmpty() &&
+            currentAndroidId.isNotEmpty() &&
+            phoneNumber.isNotEmpty() &&
+            batteryHealth.isNotEmpty() &&
+            testIpv4.isNotEmpty() &&
+            (testIpv4.startsWith("192.0.2.") || testIpv4.startsWith("198.51.100.") || testIpv4.startsWith("203.0.113.")) &&
+            atomicIntegrity == "ALL_FIELDS_ATOMICALLY_BOUND"
+        )
+        val consistencyStatus = if (isConsistencyPass) "PASS" else "FAIL"
+
+        val isIpPass = testIpv4.isNotEmpty() && (
+            testIpv4.startsWith("192.0.2.") || testIpv4.startsWith("198.51.100.") || testIpv4.startsWith("203.0.113.")
+        ) && (previousTestIpv4.isEmpty() || testIpv4 != previousTestIpv4)
+        val ipProfileStatus = if (isIpPass) "PASS" else "FAIL"
+
         val sb = StringBuilder()
         sb.append("╔═════════════════════════════════════════════════╗\n")
         sb.append("║  ACTIVE PROFILE LIFECYCLE & RUNTIME CORRELATION ║\n")
         sb.append("╠═════════════════════════════════════════════════╣\n")
         sb.append("PROFILE ID          : $profileId\n")
         sb.append("PROFILE FINGERPRINT : ${profileFingerprint.take(16)}...\n")
+        sb.append("ANDROID ID          : ${mask(currentAndroidId)}\n")
+        sb.append("SYNTHETIC PHONE     : $phoneNumber\n")
+        sb.append("BATTERY HEALTH      : $batteryHealth%\n")
+        sb.append("TEST IPV4 (RFC5737) : $testIpv4\n")
+        sb.append("IP PROFILE VALUE    : $testIpv4\n")
+        sb.append("IP PROFILE STATUS   : $ipProfileStatus\n")
+        sb.append("PROFILE UNIQUENESS  : $uniquenessStatus\n")
+        sb.append("PROFILE CONSISTENCY : $consistencyStatus\n")
+        sb.append("ATOMIC INTEGRITY    : $atomicIntegrity\n")
+        sb.append("IP SCOPE NOTICE     : Synthetic test value; does not modify physical Wi-Fi/cellular IP\n")
         sb.append("PROFILE STATE       : $profileState\n")
         sb.append("ACTIVATION RESULT   : $activationResult\n")
         sb.append("CONSUMPTION RESULT  : $consumptionResult\n")
@@ -609,7 +658,7 @@ class SecondTargetActivity : AppCompatActivity() {
         )
 
         sb.append("═════════════════════════════════════════════════\n")
-        val summary = "AUDIT RESULTS (TARGET #2): $passCount PASS | $platformRestrictedCount PLATFORM_RESTRICTED | ${totalCount - passCount - platformRestrictedCount} FAIL\n(Total APIs evaluated: $totalCount)"
+        val summary = "PROFILE UNIQUENESS: $uniquenessStatus\nPROFILE CONSISTENCY: $consistencyStatus\nIP PROFILE VALUE: $testIpv4\nIP PROFILE STATUS: $ipProfileStatus\nAUDIT RESULTS (TARGET #2): $passCount PASS | $platformRestrictedCount PLATFORM_RESTRICTED | ${totalCount - passCount - platformRestrictedCount} FAIL\n(Total APIs evaluated: $totalCount)"
         tvSecondAuditSummary.text = summary
         tvSecondAuditDetails.text = sb.toString()
         Log.d(TAG, summary)

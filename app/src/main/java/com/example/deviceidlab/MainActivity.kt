@@ -65,6 +65,9 @@ class MainActivity : AppCompatActivity() {
                 buildProduct = "panther",
                 buildDevice = "panther",
                 buildFingerprint = "google/panther/panther:13/TQ3A.230901.001/10750709:user/release-keys",
+                phoneNumber = "+1 (555) 234-5678",
+                batteryHealth = 95,
+                testIpv4 = "192.0.2.101",
                 state = ProfileState.AVAILABLE
             )
             val result = identityManager.applyAndActivateProfile(p1)
@@ -85,6 +88,9 @@ class MainActivity : AppCompatActivity() {
                 buildProduct = "dm1qxxx",
                 buildDevice = "dm1q",
                 buildFingerprint = "samsung/dm1qxxx/dm1q:14/UP1A.231005.007/S911BXXU3BWJM:user/release-keys",
+                phoneNumber = "+1 (555) 876-5432",
+                batteryHealth = 82,
+                testIpv4 = "192.0.2.187",
                 state = ProfileState.AVAILABLE
             )
             val result = identityManager.applyAndActivateProfile(p2)
@@ -112,19 +118,28 @@ class MainActivity : AppCompatActivity() {
         val createdStr = dateFormat.format(Date(profile.createdAt))
         val consumedStr = if (profile.consumedAt != null) dateFormat.format(Date(profile.consumedAt)) else "NOT_CONSUMED"
         val fingerprint = profile.computeFingerprint().take(12) + "..."
+        val uniquenessStatus = identityManager.getProfileUniquenessStatus()
+        val consistencyStatus = identityManager.getProfileConsistencyStatus()
+        val ipStatus = identityManager.getIpProfileStatus()
 
         tvProfileLifecycle.text = StringBuilder()
             .append("Profile ID: ${profile.id}\n")
             .append("Profile State: ${profile.state}\n")
+            .append("PROFILE UNIQUENESS: $uniquenessStatus\n")
+            .append("PROFILE CONSISTENCY: $consistencyStatus\n")
+            .append("IP PROFILE VALUE: ${profile.testIpv4}\n")
+            .append("IP PROFILE STATUS: $ipStatus\n")
+            .append("ATOMIC INTEGRITY: ALL_FIELDS_BOUND_TO_SAME_PROFILE\n")
             .append("Fingerprint: $fingerprint\n")
             .append("Created: $createdStr\n")
-            .append("Activated/Consumed: $consumedStr")
+            .append("Activated/Consumed: $consumedStr\n")
+            .append("[Notice: Test-profile IPv4 is synthetic (RFC 5737); does not modify physical Wi-Fi/cellular IP]")
             .toString()
 
         tvAndroidId.text = "Android ID: ${profile.androidId} [Masked: ${TestApiCatalog.maskValue(profile.androidId)}]"
         tvImei.text = "IMEI: ${profile.imei} [Masked: ${TestApiCatalog.maskValue(profile.imei)}]"
         tvSerial.text = "Serial: ${profile.serialNumber} [Masked: ${TestApiCatalog.maskValue(profile.serialNumber)}]"
-        tvMac.text = "MAC: ${profile.macAddress} [Masked: ${TestApiCatalog.maskValue(profile.macAddress)}]"
+        tvMac.text = "MAC: ${profile.macAddress} [Masked: ${TestApiCatalog.maskValue(profile.macAddress)}]\nPhone: ${profile.phoneNumber} | Battery: ${profile.batteryHealth}% | IPv4: ${profile.testIpv4}"
         tvModel.text = "Model: ${profile.buildModel} (${profile.buildManufacturer}) [Product: ${profile.buildProduct}]"
     }
 

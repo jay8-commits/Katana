@@ -2,6 +2,9 @@ export interface DeviceIdentity {
   identityNumber: number;
   androidTestId: string;
   telephonyTestId: string;
+  syntheticPhoneNumber: string;
+  batteryHealth: number;
+  fingerprint: string;
   createdAt: number;
 }
 

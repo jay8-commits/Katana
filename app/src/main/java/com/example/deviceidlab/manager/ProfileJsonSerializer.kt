@@ -39,6 +39,9 @@ object ProfileJsonSerializer {
         sb.append("\"buildProduct\":").append(escape(p.buildProduct)).append(",")
         sb.append("\"buildDevice\":").append(escape(p.buildDevice)).append(",")
         sb.append("\"buildFingerprint\":").append(escape(p.buildFingerprint)).append(",")
+        sb.append("\"phoneNumber\":").append(escape(p.phoneNumber)).append(",")
+        sb.append("\"batteryHealth\":").append(p.batteryHealth).append(",")
+        sb.append("\"testIpv4\":").append(escape(p.testIpv4)).append(",")
         sb.append("\"createdAt\":").append(p.createdAt).append(",")
         sb.append("\"state\":").append(escape(p.state.name)).append(",")
         sb.append("\"consumedAt\":").append(p.consumedAt ?: "null")
@@ -56,6 +59,9 @@ object ProfileJsonSerializer {
         }
         val consumedAt = map["consumedAt"]?.toLongOrNull()
         val createdAt = map["createdAt"]?.toLongOrNull() ?: System.currentTimeMillis()
+        val phoneNumber = map["phoneNumber"]?.takeIf { it.isNotEmpty() } ?: "+1 (555) 234-5678"
+        val batteryHealth = map["batteryHealth"]?.toIntOrNull() ?: 95
+        val testIpv4 = map["testIpv4"]?.takeIf { it.isNotEmpty() } ?: "192.0.2.101"
 
         return DeviceProfile(
             id = map["id"] ?: "",
@@ -70,6 +76,9 @@ object ProfileJsonSerializer {
             buildProduct = map["buildProduct"] ?: "",
             buildDevice = map["buildDevice"] ?: "",
             buildFingerprint = map["buildFingerprint"] ?: "",
+            phoneNumber = phoneNumber,
+            batteryHealth = batteryHealth,
+            testIpv4 = testIpv4,
             createdAt = createdAt,
             state = state,
             consumedAt = consumedAt
