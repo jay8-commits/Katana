@@ -67,7 +67,7 @@ class DeviceIdentityManagerTest {
     @Test
     fun testCatalogAllowlistInventory() {
         val apis = TestApiCatalog.SUPPORTED_APIS
-        assertEquals("Strictly 16 APIs must be registered in the catalog", 16, apis.size)
+        assertEquals("Strictly 21 APIs must be registered in the catalog", 21, apis.size)
         assertTrue(apis.any { it.configKey == NPatchConfig.KEY_ANDROID_ID && it.isDynamic })
         assertTrue(apis.any { it.configKey == NPatchConfig.KEY_BUILD_MODEL && it.requiresProcessRestart })
         assertTrue(apis.any { it.configKey == NPatchConfig.KEY_SERIAL })
@@ -81,7 +81,7 @@ class DeviceIdentityManagerTest {
         val dynamicApis = TestApiCatalog.SUPPORTED_APIS.filter { it.isDynamic }
 
         assertEquals(7, staticApis.size) // MODEL, MANUFACTURER, BRAND, PRODUCT, DEVICE, FINGERPRINT, SERIAL field
-        assertEquals(9, dynamicApis.size) // ANDROID_ID (2), getSerial, 5 Telephony, MAC
+        assertEquals(14, dynamicApis.size) // ANDROID_ID (2), getSerial (1), Telephony 0-arg & slot/sub overloads (10), MAC (1)
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ All supported test APIs are defined in `com.example.deviceidlab.hook.TestApiCata
 
 ---
 
-## 📋 Centralized API Inventory (16 Total)
+## 📋 Centralized API Inventory (21 Total)
 
 | # | API Name | Method / Field Signature | Replacement Source | Runtime Mechanism | Platform Security / OS Restrictions |
 | :- | :--- | :--- | :--- | :--- | :--- |
@@ -18,12 +18,17 @@ All supported test APIs are defined in `com.example.deviceidlab.hook.TestApiCata
 | 8 | **`Build.FINGERPRINT`** | `android.os.Build.FINGERPRINT` (String) | `DeviceProfile.buildFingerprint` | Static Field Reflection | Requires process launch / restart |
 | 9 | **`Build.SERIAL`** | `android.os.Build.SERIAL` (String) | `DeviceProfile.serialNumber` | Static Field Reflection | Deprecated in API 26 (returns `UNKNOWN` on modern OS) |
 | 10 | **`Build.getSerial()`** | `android.os.Build.getSerial()` | `DeviceProfile.serialNumber` | Dynamic Method Hook (`XC_MethodHook`) | Requires `READ_PRIVILEGED_PHONE_STATE` on Android 9+ |
-| 11 | **`TelephonyManager.getDeviceId()`** | `getDeviceId()` & `getDeviceId(int)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
-| 12 | **`TelephonyManager.getImei()`** | `getImei()` & `getImei(int)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
-| 13 | **`TelephonyManager.getMeid()`** | `getMeid()` & `getMeid(int)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Requires CDMA device / Restricted on Android 10+ |
-| 14 | **`TelephonyManager.getSimSerialNumber()`** | `getSimSerialNumber()` | `DeviceProfile.serialNumber` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
-| 15 | **`TelephonyManager.getSubscriberId()`** | `getSubscriberId()` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
-| 16 | **`WifiInfo.getMacAddress()`** | `WifiInfo.getMacAddress()` | `DeviceProfile.macAddress` | Dynamic Method Hook (`XC_MethodHook`) | Returns `02:00:00:00:00:00` by default on Android 6.0+ |
+| 11 | **`TelephonyManager.getDeviceId()`** | `getDeviceId()` (0-arg) | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 12 | **`TelephonyManager.getDeviceId(int)`** | `getDeviceId(int slotIndex)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 13 | **`TelephonyManager.getImei()`** | `getImei()` (0-arg) | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 14 | **`TelephonyManager.getImei(int)`** | `getImei(int slotIndex)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 15 | **`TelephonyManager.getMeid()`** | `getMeid()` (0-arg) | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Requires CDMA device / Restricted on Android 10+ |
+| 16 | **`TelephonyManager.getMeid(int)`** | `getMeid(int slotIndex)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Requires CDMA device / Restricted on Android 10+ |
+| 17 | **`TelephonyManager.getSimSerialNumber()`** | `getSimSerialNumber()` (0-arg) | `DeviceProfile.serialNumber` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 18 | **`TelephonyManager.getSimSerialNumber(int)`** | `getSimSerialNumber(int subId)` | `DeviceProfile.serialNumber` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 19 | **`TelephonyManager.getSubscriberId()`** | `getSubscriberId()` (0-arg) | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 20 | **`TelephonyManager.getSubscriberId(int)`** | `getSubscriberId(int subId)` | `DeviceProfile.imei` | Dynamic Method Hook (`XC_MethodHook`) | Restricted on Android 10+ (API 29+) |
+| 21 | **`WifiInfo.getMacAddress()`** | `WifiInfo.getMacAddress()` | `DeviceProfile.macAddress` | Dynamic Method Hook (`XC_MethodHook`) | Returns `02:00:00:00:00:00` by default on Android 6.0+ |
 
 ---
 
@@ -43,12 +48,42 @@ All supported test APIs are defined in `com.example.deviceidlab.hook.TestApiCata
 | **Build.FINGERPRINT** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **NOT_TESTED** |
 | **Build.SERIAL (Field)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **NOT_TESTED** |
 | **Build.getSerial() (Method)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
-| **TelephonyManager.getDeviceId() & (int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
-| **TelephonyManager.getImei() & (int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
-| **TelephonyManager.getMeid() & (int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getDeviceId()** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getDeviceId(int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getImei()** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getImei(int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getMeid()** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getMeid(int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
 | **TelephonyManager.getSimSerialNumber()** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **TelephonyManager.getSimSerialNumber(int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
 | **TelephonyManager.getSubscriberId()** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
-| **WifiInfo.getMacAddress()`** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **NOT_TESTED** |
+| **TelephonyManager.getSubscriberId(int)** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **PLATFORM_RESTRICTED** |
+| **WifiInfo.getMacAddress()** | YES | PASS | YES | NOT_TESTED | NOT_TESTED | NOT_TESTED | **NOT_TESTED** |
+
+---
+
+## 📍 Location Subsystem APIs (14 Total)
+
+All supported Location APIs are registered in `com.example.deviceidlab.hook.LocationApiCatalog`.
+
+| # | Tier | API Name | Method Signature | Interception Strategy | Platform Status |
+| :- | :---: | :--- | :--- | :--- | :--- |
+| 1 | **Tier A** | `LocationManager.getLastKnownLocation(provider)` | `getLastKnownLocation(String)` | `XC_MethodHook` | NOT_PERFORMED |
+| 2 | **Tier A** | `LocationManager.isProviderEnabled(provider)` | `isProviderEnabled(String)` | `XC_MethodHook` | NOT_PERFORMED |
+| 3 | **Tier B** | `LocationManager.requestLocationUpdates(String, long, float, LocationListener)` | `requestLocationUpdates(...)` | Listener proxy injection | NOT_PERFORMED |
+| 4 | **Tier B** | `LocationManager.requestLocationUpdates(LocationRequest, LocationListener, Looper)` | `requestLocationUpdates(...)` | Listener proxy injection | NOT_PERFORMED |
+| 5 | **Tier B** | `LocationManager.requestLocationUpdates(String, long, float, PendingIntent)` | `requestLocationUpdates(...)` | Intent payload injection | NOT_PERFORMED |
+| 6 | **Tier B** | `LocationManager.requestSingleUpdate(String, LocationListener, Looper)` | `requestSingleUpdate(...)` | Single synthetic callback | NOT_PERFORMED |
+| 7 | **Tier B** | `LocationManager.requestSingleUpdate(Criteria, LocationListener, Looper)` | `requestSingleUpdate(...)` | Single synthetic callback | NOT_PERFORMED |
+| 8 | **Tier B** | `LocationManager.getCurrentLocation(String, CancellationSignal, Executor, Consumer)` | `getCurrentLocation(...)` | Async synthetic consumer | NOT_PERFORMED |
+| 9 | **Tier B** | `LocationManager.getProviders(boolean)` | `getProviders(boolean)` | List hook ("gps", "network") | NOT_PERFORMED |
+| 10 | **Tier B** | `LocationManager.getBestProvider(Criteria, boolean)` | `getBestProvider(...)` | Criteria hook | NOT_PERFORMED |
+| 11 | **Tier C** | `FusedLocationProviderClient.getLastLocation()` | `getLastLocation()` | GMS Task<Location> mock | NOT_PERFORMED |
+| 12 | **Tier C** | `FusedLocationProviderClient.getCurrentLocation(int, CancellationToken)` | `getCurrentLocation(...)` | GMS Task<Location> mock | NOT_PERFORMED |
+| 13 | **Tier C** | `FusedLocationProviderClient.requestLocationUpdates(LocationRequest, LocationCallback, Looper)` | `requestLocationUpdates(...)` | GMS callback interception | NOT_PERFORMED |
+| 14 | **Tier D** | `Location.getLatitude()` / `getLongitude()` | `getLatitude()`, `getLongitude()` | Synthetic POJO instantiation | NOT_PERFORMED |
+
+*Note: In this container environment lacking an Android SDK and physical device, all location runtime verifications are strictly recorded as `NOT_PERFORMED`.*
 
 ---
 

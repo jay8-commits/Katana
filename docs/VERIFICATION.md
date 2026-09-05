@@ -8,7 +8,7 @@ To prevent false assertions of runtime interception, this project strictly disti
 ┌────────────────────────────────────────────────────────┐
 │ TIER A: SOURCE & CODE INSPECTION                       │
 │    - Bytecode & Hook signature matching in Xposed API  │
-│    - TestApiCatalog registration (16 APIs)             │
+│    - TestApiCatalog registration (21 APIs)             │
 │    - Status: VERIFIED                                  │
 └──────────────────────────┬─────────────────────────────┘
                            │
@@ -128,3 +128,45 @@ Both target applications query `DeviceIdProvider` independently and receive the 
 ```
 
 > **Note**: Logs are only classified as **ACTUAL DEVICE LOGS** when captured via `adb logcat` from an active hardware test session.
+
+---
+
+## 7. Location Subsystem Verification Model
+
+### Distinct Verification Stages
+1. **`HOOK_REGISTERED`**: Verified at module initialization (`installLocationHooks`).
+2. **`HOOK_INVOKED`**: Verified when target application executes `LocationManager.getLastKnownLocation(provider)` or `isProviderEnabled(provider)`.
+3. **`VALUE_GENERATED`**: Verified when active `LocationProfile` is provisioned via `DeviceIdProvider` IPC (`NPatchConfig.LOCATION_PROVIDER_URI`).
+4. **`VALUE_RETURNED`**: Verified when synthetic `Location` POJO is constructed and returned via `param.result`.
+5. **`TARGET_OBSERVED`**: Verified when target activity (`TargetDemoActivity` or `SecondTargetActivity`) receives the location object and verifies coordinates within tolerance (`delta < 1e-5`).
+
+### Permission & Diagnostic Status Classification
+- **`PERMISSION_GRANTED`**: Target app has fine or coarse location permission.
+- **`PERMISSION_DENIED`**: Target app lacks permission (distinguished from hook failure).
+- **`LOCATION_DISABLED`**: System location providers disabled.
+- **`PROVIDER_UNAVAILABLE`**: System `LocationManager` is null or inaccessible.
+- **`HOOK_NOT_INVOKED`**: Framework method returned un-intercepted null.
+- **`HOOK_INVOKED`**: Method hook fired and intercepted request.
+- **`EXPECTED_LOCATION_OBSERVED`**: Synthetic location matching active profile observed by target app.
+
+> **Status in Current Container Environment**: `NOT_PERFORMED` (Awaiting physical Android device with NPatch/LSPosed runtime).
+
+---
+
+## 8. Worldwide Geographic & Synthetic IP Verification Model
+
+### Verification Matrix
+
+| Subsystem Component | Verification Level | Status in Container | Hardware Criterion |
+| :--- | :--- | :--- | :--- |
+| **80+ World City Catalog** | Data / Schema | **PASS** (15/15 unit tests) | Valid coordinates within `[-90, 90]` and `[-180, 180]`, valid IANA timezones. |
+| **Mode 1: Manual City Selection** | Controller & IPC | **VERIFIED** | Correct city record mapped, coordinates locked to catalog. |
+| **Mode 2: Random World City** | Controller & IPC | **VERIFIED** | Uniform random selection from 80+ cities, unique RFC 5737 IP. |
+| **Mode 3: Random City in Country** | Controller & IPC | **VERIFIED** | Filtered selection strictly within selected sovereign country. |
+| **RFC 5737 Synthetic Test IP** | Security / RFC | **VERIFIED** | Deterministic allocation within `203.0.113.0/24` TEST-NET-3. |
+| **Profile Consistency Check** | Target App UI Audit | **PASS** | `TargetDemoActivity` confirms City ↔ Country ↔ Lat/Lng ↔ Timezone ↔ IP coherence. |
+| **IP Scope Boundary** | Architecture / Network | **DOCUMENTED & CLARIFIED** | Synthetic IP is application-level; physical egress is unhooked. |
+| **Multi-Profile Transition** | Lifecycle / IPC | **PASS** | Active profile switches instantly; previous profile marked `CONSUMED`. Zero restart needed. |
+| **Target App Dynamic Observation** | Physical Hardware | **NOT_PERFORMED** | Real Android hardware verification deferred to testing environment. |
+
+

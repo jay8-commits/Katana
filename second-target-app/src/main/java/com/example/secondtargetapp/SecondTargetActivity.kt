@@ -38,6 +38,29 @@ class SecondTargetActivity : AppCompatActivity() {
     private lateinit var tvSecondAuditDetails: TextView
     private lateinit var btnSecondRefresh: Button
 
+    private lateinit var tvSecondLocationStatus: TextView
+    private lateinit var tvSecondLocationExpected: TextView
+    private lateinit var tvSecondLocationActual: TextView
+    private lateinit var tvSecondLocationLatMatch: TextView
+    private lateinit var tvSecondLocationLngMatch: TextView
+    private lateinit var tvSecondLocationAltMatch: TextView
+    private lateinit var tvSecondLocationAccMatch: TextView
+    private lateinit var tvSecondLocationWorldProfile: TextView
+    private lateinit var tvSecondLocationSyntheticIp: TextView
+    private lateinit var tvSecondLocationProfileConsistency: TextView
+    private lateinit var tvSecondLocationPublicIpNotice: TextView
+    private lateinit var tvSecondLocationHookEvent: TextView
+    private lateinit var tvSecondLocationDiagnosis: TextView
+
+    private lateinit var tvSecondNetworkStatus: TextView
+    private lateinit var tvSecondNetworkExpectedIp: TextView
+    private lateinit var tvSecondNetworkWifiIp: TextView
+    private lateinit var tvSecondNetworkDhcpIp: TextView
+    private lateinit var tvSecondNetworkWifiSsid: TextView
+    private lateinit var tvSecondNetworkWifiMac: TextView
+    private lateinit var tvSecondNetworkHardwareMac: TextView
+    private lateinit var tvSecondNetworkDiagnosis: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_second_target)
@@ -46,6 +69,29 @@ class SecondTargetActivity : AppCompatActivity() {
         tvSecondFirstTestExpected = findViewById(R.id.tvSecondFirstTestExpected)
         tvSecondFirstTestActual = findViewById(R.id.tvSecondFirstTestActual)
         tvSecondFirstTestDiagnosis = findViewById(R.id.tvSecondFirstTestDiagnosis)
+
+        tvSecondLocationStatus = findViewById(R.id.tvSecondLocationStatus)
+        tvSecondLocationExpected = findViewById(R.id.tvSecondLocationExpected)
+        tvSecondLocationActual = findViewById(R.id.tvSecondLocationActual)
+        tvSecondLocationLatMatch = findViewById(R.id.tvSecondLocationLatMatch)
+        tvSecondLocationLngMatch = findViewById(R.id.tvSecondLocationLngMatch)
+        tvSecondLocationAltMatch = findViewById(R.id.tvSecondLocationAltMatch)
+        tvSecondLocationAccMatch = findViewById(R.id.tvSecondLocationAccMatch)
+        tvSecondLocationWorldProfile = findViewById(R.id.tvSecondLocationWorldProfile)
+        tvSecondLocationSyntheticIp = findViewById(R.id.tvSecondLocationSyntheticIp)
+        tvSecondLocationProfileConsistency = findViewById(R.id.tvSecondLocationProfileConsistency)
+        tvSecondLocationPublicIpNotice = findViewById(R.id.tvSecondLocationPublicIpNotice)
+        tvSecondLocationHookEvent = findViewById(R.id.tvSecondLocationHookEvent)
+        tvSecondLocationDiagnosis = findViewById(R.id.tvSecondLocationDiagnosis)
+
+        tvSecondNetworkStatus = findViewById(R.id.tvSecondNetworkStatus)
+        tvSecondNetworkExpectedIp = findViewById(R.id.tvSecondNetworkExpectedIp)
+        tvSecondNetworkWifiIp = findViewById(R.id.tvSecondNetworkWifiIp)
+        tvSecondNetworkDhcpIp = findViewById(R.id.tvSecondNetworkDhcpIp)
+        tvSecondNetworkWifiSsid = findViewById(R.id.tvSecondNetworkWifiSsid)
+        tvSecondNetworkWifiMac = findViewById(R.id.tvSecondNetworkWifiMac)
+        tvSecondNetworkHardwareMac = findViewById(R.id.tvSecondNetworkHardwareMac)
+        tvSecondNetworkDiagnosis = findViewById(R.id.tvSecondNetworkDiagnosis)
 
         tvSecondAuditSummary = findViewById(R.id.tvSecondAuditSummary)
         tvSecondAuditDetails = findViewById(R.id.tvSecondAuditDetails)
@@ -662,6 +708,161 @@ class SecondTargetActivity : AppCompatActivity() {
         tvSecondAuditSummary.text = summary
         tvSecondAuditDetails.text = sb.toString()
         Log.d(TAG, summary)
+
+        // Execute Location Verification Subsystem Audit
+        runLocationVerification(expectedProfile)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun runLocationVerification(expectedProfile: Map<String, String>) {
+        val expLatStr = expectedProfile["loc_latitude"]
+        val expLngStr = expectedProfile["loc_longitude"]
+        val expAltStr = expectedProfile["loc_altitude"] ?: "0.0"
+        val expAccStr = expectedProfile["loc_accuracy"] ?: "5.0"
+        val expProvider = expectedProfile["loc_provider"] ?: "gps"
+        val expProfileId = expectedProfile["loc_profile_id"] ?: "preset"
+
+        val expCity = expectedProfile["loc_city"] ?: "Tokyo"
+        val expCountry = expectedProfile["loc_country"] ?: "Japan"
+        val expCountryCode = expectedProfile["loc_country_code"] ?: "JP"
+        val expTimezone = expectedProfile["loc_timezone"] ?: "Asia/Tokyo"
+        val expSyntheticIp = expectedProfile["loc_synthetic_ip"] ?: "203.0.113.42"
+
+        val expLat = expLatStr?.toDoubleOrNull()
+        val expLng = expLngStr?.toDoubleOrNull()
+        val expAlt = expAltStr.toDoubleOrNull() ?: 0.0
+        val expAcc = expAccStr.toFloatOrNull() ?: 5.0f
+
+        val isIpInTestRange = expSyntheticIp.startsWith("203.0.113.") ||
+                              expSyntheticIp.startsWith("198.51.100.") ||
+                              expSyntheticIp.startsWith("192.0.2.")
+        val isProfileConsistent = expCity.isNotEmpty() &&
+                                  expCountry.isNotEmpty() &&
+                                  expLat != null && expLng != null &&
+                                  expTimezone.isNotEmpty() &&
+                                  isIpInTestRange
+
+        tvSecondLocationWorldProfile.text = "WORLD PROFILE: $expCity, $expCountry ($expCountryCode) | Timezone: $expTimezone"
+        tvSecondLocationSyntheticIp.text = "SYNTHETIC TEST IP: $expSyntheticIp (RFC 5737 TEST-NET-3)"
+        tvSecondLocationProfileConsistency.text = "PROFILE CONSISTENCY: ${if (isProfileConsistent) "PASS" else "FAIL"}"
+        tvSecondLocationProfileConsistency.setTextColor(
+            if (isProfileConsistent) android.graphics.Color.parseColor("#15803D")
+            else android.graphics.Color.parseColor("#B91C1C")
+        )
+
+        tvSecondLocationExpected.text = if (expLat != null && expLng != null) {
+            "EXPECTED LOCATION: $expLat, $expLng (alt: ${expAlt}m, acc: ${expAcc}m, prov: $expProvider, id: $expProfileId)"
+        } else {
+            "EXPECTED LOCATION: <missing or invalid IPC location>"
+        }
+
+        val hasFine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasCoarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!hasFine && !hasCoarse) {
+            tvSecondLocationStatus.text = "STATUS: PERMISSION_DENIED"
+            tvSecondLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvSecondLocationActual.text = "ACTUAL LOCATION: <permission not granted>"
+            tvSecondLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvSecondLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvSecondLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvSecondLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvSecondLocationHookEvent.text = "HOOK EVENT: LocationManager.getLastKnownLocation(provider) [Blocked by permission]"
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: Location permission not granted by target process (PERMISSION_DENIED). Cannot query LocationManager."
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), 101)
+            return
+        }
+
+        val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+        if (lm == null) {
+            tvSecondLocationStatus.text = "STATUS: PROVIDER_UNAVAILABLE"
+            tvSecondLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvSecondLocationActual.text = "ACTUAL LOCATION: <LocationManager service null>"
+            tvSecondLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvSecondLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvSecondLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvSecondLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: System LocationManager unavailable (PROVIDER_UNAVAILABLE)."
+            return
+        }
+
+        var actualLoc: android.location.Location? = null
+        val targetProvider = if (expProvider.isNotEmpty()) expProvider else android.location.LocationManager.GPS_PROVIDER
+
+        try {
+            actualLoc = lm.getLastKnownLocation(targetProvider)
+            if (actualLoc == null && targetProvider != android.location.LocationManager.GPS_PROVIDER) {
+                actualLoc = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+            }
+            if (actualLoc == null && targetProvider != android.location.LocationManager.NETWORK_PROVIDER) {
+                actualLoc = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+            }
+        } catch (e: Throwable) {
+            tvSecondLocationStatus.text = "STATUS: PLATFORM_RESTRICTED"
+            tvSecondLocationStatus.setTextColor(android.graphics.Color.parseColor("#D97706"))
+            tvSecondLocationActual.text = "ACTUAL LOCATION: <SecurityException / Restricted: ${e.message}>"
+            tvSecondLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvSecondLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvSecondLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvSecondLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: LocationManager query threw exception: ${e.message}"
+            return
+        }
+
+        if (actualLoc == null) {
+            tvSecondLocationStatus.text = "STATUS: HOOK_NOT_INVOKED"
+            tvSecondLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvSecondLocationActual.text = "ACTUAL LOCATION: null (No fix or hook inactive)"
+            tvSecondLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvSecondLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvSecondLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvSecondLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: LocationManager.getLastKnownLocation() returned null. In unhooked Android environment without active GPS fix, getLastKnownLocation() returns null (HOOK_NOT_INVOKED / NOT_PERFORMED)."
+            return
+        }
+
+        val actLat = actualLoc.latitude
+        val actLng = actualLoc.longitude
+        val actAlt = actualLoc.altitude
+        val actAcc = actualLoc.accuracy
+        val actProv = actualLoc.provider ?: "<unknown>"
+
+        tvSecondLocationActual.text = "ACTUAL LOCATION: $actLat, $actLng (alt: ${actAlt}m, acc: ${actAcc}m, prov: $actProv)"
+
+        if (expLat == null || expLng == null) {
+            tvSecondLocationStatus.text = "STATUS: FAIL: NO_EXPECTED_LOCATION"
+            tvSecondLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvSecondLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvSecondLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvSecondLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: Expected location profile missing from IPC provider."
+            return
+        }
+
+        val epsilonCoord = 1e-5
+        val epsilonAlt = 0.5
+        val epsilonAcc = 0.1f
+
+        val latMatch = kotlin.math.abs(actLat - expLat) <= epsilonCoord
+        val lngMatch = kotlin.math.abs(actLng - expLng) <= epsilonCoord
+        val altMatch = kotlin.math.abs(actAlt - expAlt) <= epsilonAlt
+        val accMatch = kotlin.math.abs(actAcc - expAcc) <= epsilonAcc
+
+        tvSecondLocationLatMatch.text = "LATITUDE MATCH: ${if (latMatch) "YES (delta < 1e-5)" else "NO (act=$actLat, exp=$expLat)"}"
+        tvSecondLocationLngMatch.text = "LONGITUDE MATCH: ${if (lngMatch) "YES (delta < 1e-5)" else "NO (act=$actLng, exp=$expLng)"}"
+        tvSecondLocationAltMatch.text = "ALTITUDE MATCH: ${if (altMatch) "YES (delta < 0.5m)" else "NO (act=$actAlt, exp=$expAlt)"}"
+        tvSecondLocationAccMatch.text = "ACCURACY MATCH: ${if (accMatch) "YES (delta < 0.1m)" else "NO (act=$actAcc, exp=$expAcc)"}"
+        tvSecondLocationHookEvent.text = "HOOK EVENT: LocationManager.getLastKnownLocation($actProv) -> HOOK_INVOKED"
+
+        if (latMatch && lngMatch) {
+            tvSecondLocationStatus.text = "STATUS: EXPECTED_LOCATION_OBSERVED (PASS)"
+            tvSecondLocationStatus.setTextColor(android.graphics.Color.parseColor("#15803D"))
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: Target process directly observed synthetic coordinates matching active LocationProfile within tolerance."
+        } else {
+            tvSecondLocationStatus.text = "STATUS: FAIL: LOCATION_MISMATCH"
+            tvSecondLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvSecondLocationDiagnosis.text = "DIAGNOSIS: Target process observed non-matching location coordinates (Hardware GPS or unhooked default observed)."
+        }
     }
 
     private fun queryActiveProfileFromProvider(): Map<String, String> {

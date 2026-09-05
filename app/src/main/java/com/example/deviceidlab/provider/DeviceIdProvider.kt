@@ -6,7 +6,10 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.util.Log
+import com.example.deviceidlab.hook.NPatchConfig
 import com.example.deviceidlab.manager.DeviceIdentityManager
+import com.example.deviceidlab.manager.LocationJsonSerializer
+import com.example.deviceidlab.manager.LocationProfileManager
 
 class DeviceIdProvider : ContentProvider() {
 
@@ -14,6 +17,7 @@ class DeviceIdProvider : ContentProvider() {
         private const val TAG = "DeviceIdProvider"
         const val AUTHORITY = "com.example.deviceidlab.provider.deviceid"
         val CONTENT_URI: Uri = Uri.parse("content://$AUTHORITY/profile")
+        val LOCATION_URI: Uri = Uri.parse("content://$AUTHORITY/location")
     }
 
     override fun onCreate(): Boolean {
@@ -29,6 +33,57 @@ class DeviceIdProvider : ContentProvider() {
         sortOrder: String?
     ): Cursor {
         val ctx = context ?: return MatrixCursor(emptyArray())
+        val locManager = LocationProfileManager(ctx)
+        val worldwideLoc = locManager.getActiveWorldwideProfile()
+        val locProfile = worldwideLoc.toLocationProfile()
+
+        // Handle dedicated /location query
+        if (uri.path?.contains("location") == true) {
+            val locColumns = arrayOf(
+                NPatchConfig.KEY_LOC_PROFILE_ID,
+                NPatchConfig.KEY_LOC_CITY,
+                NPatchConfig.KEY_LOC_COUNTRY,
+                NPatchConfig.KEY_LOC_COUNTRY_CODE,
+                NPatchConfig.KEY_LOC_LATITUDE,
+                NPatchConfig.KEY_LOC_LONGITUDE,
+                NPatchConfig.KEY_LOC_TIMEZONE,
+                NPatchConfig.KEY_LOC_SYNTHETIC_IP,
+                NPatchConfig.KEY_LOC_ALTITUDE,
+                NPatchConfig.KEY_LOC_ACCURACY,
+                NPatchConfig.KEY_LOC_SPEED,
+                NPatchConfig.KEY_LOC_BEARING,
+                NPatchConfig.KEY_LOC_TIMESTAMP,
+                NPatchConfig.KEY_LOC_ELAPSED_NANOS,
+                NPatchConfig.KEY_LOC_PROVIDER,
+                NPatchConfig.KEY_LOC_STATE,
+                NPatchConfig.KEY_LOC_JSON
+            )
+            val cursor = MatrixCursor(locColumns)
+            cursor.addRow(
+                arrayOf(
+                    worldwideLoc.profileId,
+                    worldwideLoc.city,
+                    worldwideLoc.country,
+                    worldwideLoc.countryCode,
+                    worldwideLoc.latitude.toString(),
+                    worldwideLoc.longitude.toString(),
+                    worldwideLoc.timezone,
+                    worldwideLoc.syntheticIp,
+                    worldwideLoc.altitude.toString(),
+                    worldwideLoc.accuracy.toString(),
+                    worldwideLoc.speed.toString(),
+                    worldwideLoc.bearing.toString(),
+                    worldwideLoc.timestamp.toString(),
+                    worldwideLoc.elapsedRealtimeNanos.toString(),
+                    worldwideLoc.provider,
+                    worldwideLoc.state,
+                    LocationJsonSerializer.serializeWorldwide(worldwideLoc)
+                )
+            )
+            Log.d(TAG, "IPC Query received for location URI: $uri, returning ${worldwideLoc.city}, ${worldwideLoc.country} (${worldwideLoc.latitude}, ${worldwideLoc.longitude})")
+            return cursor
+        }
+
         val manager = DeviceIdentityManager(ctx)
         val profile = manager.getActiveProfile()
 
@@ -49,7 +104,25 @@ class DeviceIdProvider : ContentProvider() {
             "previousProfileId", "previousFingerprint",
             "previousAndroidId", "previousPhoneNumber", "previousBatteryHealth", "previousTestIpv4",
             "atomicIntegrity",
-            "createdAt", "consumedAt", "activationResult", "consumptionResult"
+            "createdAt", "consumedAt", "activationResult", "consumptionResult",
+            // Location Columns for consolidated IPC access
+            NPatchConfig.KEY_LOC_LATITUDE,
+            NPatchConfig.KEY_LOC_LONGITUDE,
+            NPatchConfig.KEY_LOC_ALTITUDE,
+            NPatchConfig.KEY_LOC_ACCURACY,
+            NPatchConfig.KEY_LOC_SPEED,
+            NPatchConfig.KEY_LOC_BEARING,
+            NPatchConfig.KEY_LOC_TIMESTAMP,
+            NPatchConfig.KEY_LOC_ELAPSED_NANOS,
+            NPatchConfig.KEY_LOC_PROVIDER,
+            NPatchConfig.KEY_LOC_PROFILE_ID,
+            NPatchConfig.KEY_LOC_CITY,
+            NPatchConfig.KEY_LOC_COUNTRY,
+            NPatchConfig.KEY_LOC_COUNTRY_CODE,
+            NPatchConfig.KEY_LOC_TIMEZONE,
+            NPatchConfig.KEY_LOC_SYNTHETIC_IP,
+            NPatchConfig.KEY_LOC_STATE,
+            NPatchConfig.KEY_LOC_JSON
         )
         val cursor = MatrixCursor(columns)
         cursor.addRow(
@@ -85,7 +158,25 @@ class DeviceIdProvider : ContentProvider() {
                 profile.createdAt.toString(),
                 (profile.consumedAt ?: 0L).toString(),
                 "SUCCESS",
-                if (profile.state.name == "CONSUMED") "CONSUMED_AND_EXEMPTED" else "AVAILABLE"
+                if (profile.state.name == "CONSUMED") "CONSUMED_AND_EXEMPTED" else "AVAILABLE",
+                // Location values
+                worldwideLoc.latitude.toString(),
+                worldwideLoc.longitude.toString(),
+                worldwideLoc.altitude.toString(),
+                worldwideLoc.accuracy.toString(),
+                worldwideLoc.speed.toString(),
+                worldwideLoc.bearing.toString(),
+                worldwideLoc.timestamp.toString(),
+                worldwideLoc.elapsedRealtimeNanos.toString(),
+                worldwideLoc.provider,
+                worldwideLoc.profileId,
+                worldwideLoc.city,
+                worldwideLoc.country,
+                worldwideLoc.countryCode,
+                worldwideLoc.timezone,
+                worldwideLoc.syntheticIp,
+                worldwideLoc.state,
+                LocationJsonSerializer.serializeWorldwide(worldwideLoc)
             )
         )
         return cursor

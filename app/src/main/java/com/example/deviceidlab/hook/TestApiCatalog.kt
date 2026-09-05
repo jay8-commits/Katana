@@ -140,31 +140,61 @@ object TestApiCatalog {
             id = "telephony_device_id",
             name = "TelephonyManager.getDeviceId()",
             frameworkClass = "android.telephony.TelephonyManager",
-            targetMethodOrField = "getDeviceId() / getDeviceId(int)",
+            targetMethodOrField = "getDeviceId()",
             configKey = NPatchConfig.KEY_IMEI,
             isDynamic = true,
             requiresProcessRestart = false,
-            description = "Intercepts TelephonyManager device ID queries (pre-Android 10 / permitted testing)."
+            description = "Intercepts TelephonyManager device ID 0-argument queries (pre-Android 10 / permitted testing)."
+        ),
+        SupportedApiDefinition(
+            id = "telephony_device_id_slot",
+            name = "TelephonyManager.getDeviceId(int)",
+            frameworkClass = "android.telephony.TelephonyManager",
+            targetMethodOrField = "getDeviceId(int)",
+            configKey = NPatchConfig.KEY_IMEI,
+            isDynamic = true,
+            requiresProcessRestart = false,
+            description = "Intercepts TelephonyManager device ID slot-indexed queries."
         ),
         SupportedApiDefinition(
             id = "telephony_imei",
             name = "TelephonyManager.getImei()",
             frameworkClass = "android.telephony.TelephonyManager",
-            targetMethodOrField = "getImei() / getImei(int)",
+            targetMethodOrField = "getImei()",
             configKey = NPatchConfig.KEY_IMEI,
             isDynamic = true,
             requiresProcessRestart = false,
-            description = "Intercepts TelephonyManager IMEI queries."
+            description = "Intercepts TelephonyManager IMEI 0-argument queries."
+        ),
+        SupportedApiDefinition(
+            id = "telephony_imei_slot",
+            name = "TelephonyManager.getImei(int)",
+            frameworkClass = "android.telephony.TelephonyManager",
+            targetMethodOrField = "getImei(int)",
+            configKey = NPatchConfig.KEY_IMEI,
+            isDynamic = true,
+            requiresProcessRestart = false,
+            description = "Intercepts TelephonyManager IMEI slot-indexed queries."
         ),
         SupportedApiDefinition(
             id = "telephony_meid",
             name = "TelephonyManager.getMeid()",
             frameworkClass = "android.telephony.TelephonyManager",
-            targetMethodOrField = "getMeid() / getMeid(int)",
+            targetMethodOrField = "getMeid()",
             configKey = NPatchConfig.KEY_IMEI,
             isDynamic = true,
             requiresProcessRestart = false,
-            description = "Intercepts TelephonyManager MEID queries."
+            description = "Intercepts TelephonyManager MEID 0-argument queries."
+        ),
+        SupportedApiDefinition(
+            id = "telephony_meid_slot",
+            name = "TelephonyManager.getMeid(int)",
+            frameworkClass = "android.telephony.TelephonyManager",
+            targetMethodOrField = "getMeid(int)",
+            configKey = NPatchConfig.KEY_IMEI,
+            isDynamic = true,
+            requiresProcessRestart = false,
+            description = "Intercepts TelephonyManager MEID slot-indexed queries."
         ),
         SupportedApiDefinition(
             id = "telephony_sim_serial",
@@ -174,7 +204,17 @@ object TestApiCatalog {
             configKey = NPatchConfig.KEY_SERIAL,
             isDynamic = true,
             requiresProcessRestart = false,
-            description = "Intercepts SIM Serial Number queries."
+            description = "Intercepts SIM Serial Number 0-argument queries."
+        ),
+        SupportedApiDefinition(
+            id = "telephony_sim_serial_sub",
+            name = "TelephonyManager.getSimSerialNumber(int)",
+            frameworkClass = "android.telephony.TelephonyManager",
+            targetMethodOrField = "getSimSerialNumber(int)",
+            configKey = NPatchConfig.KEY_SERIAL,
+            isDynamic = true,
+            requiresProcessRestart = false,
+            description = "Intercepts SIM Serial Number subId-indexed queries."
         ),
         SupportedApiDefinition(
             id = "telephony_subscriber_id",
@@ -184,7 +224,17 @@ object TestApiCatalog {
             configKey = NPatchConfig.KEY_IMEI,
             isDynamic = true,
             requiresProcessRestart = false,
-            description = "Intercepts Subscriber ID (IMSI) queries."
+            description = "Intercepts Subscriber ID (IMSI) 0-argument queries."
+        ),
+        SupportedApiDefinition(
+            id = "telephony_subscriber_id_sub",
+            name = "TelephonyManager.getSubscriberId(int)",
+            frameworkClass = "android.telephony.TelephonyManager",
+            targetMethodOrField = "getSubscriberId(int)",
+            configKey = NPatchConfig.KEY_IMEI,
+            isDynamic = true,
+            requiresProcessRestart = false,
+            description = "Intercepts Subscriber ID (IMSI) subId-indexed queries."
         ),
         SupportedApiDefinition(
             id = "wifi_mac_address",

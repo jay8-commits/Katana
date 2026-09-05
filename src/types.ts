@@ -59,3 +59,55 @@ export interface TargetDemoQueryLog {
   telephonyId: string;
   pid: number;
 }
+
+export interface LocationProfile {
+  profileId: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  accuracy: number;
+  speed: number;
+  bearing: number;
+  provider: string;
+  timestamp: number;
+  elapsedRealtimeNanos: number;
+}
+
+export interface WorldwideLocationProfile {
+  profileId: string;
+  city: string;
+  country: string;
+  countryCode: string;
+  region?: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  provider: string;
+  altitude: number;
+  accuracy: number;
+  speed: number;
+  bearing: number;
+  timestamp: number;
+  elapsedRealtimeNanos: number;
+  syntheticIp: string;
+  state: 'AVAILABLE' | 'ACTIVE' | 'CONSUMED';
+}
+
+export type CitySelectionMode = 'MANUAL' | 'RANDOM_WORLD' | 'RANDOM_COUNTRY_CITY';
+
+export type IpClassification =
+  | 'LOCAL INTERFACE IP'
+  | 'PRIVATE IP'
+  | 'SYNTHETIC TEST IP'
+  | 'ACTUAL PUBLIC IP'
+  | 'UNKNOWN';
+
+export interface IpTierItem {
+  tier: string;
+  example: string;
+  description: string;
+  isSynthetic: boolean;
+  modifiesNetworkEgress: boolean;
+  publicGeolocatable: boolean;
+}
+

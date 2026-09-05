@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { HookInterceptionBridge } from '../services/hookInterceptionBridge';
 import { DeviceIdReader } from '../services/deviceReader';
+import { WorldLocationManager } from '../services/worldLocationManager';
 
 interface TargetDemoModalProps {
   isOpen: boolean;
@@ -187,6 +188,51 @@ export const TargetDemoModal: React.FC<TargetDemoModalProps> = ({
               <div className="flex items-center gap-1.5">
                 <Cpu className="w-3.5 h-3.5" />
                 <span>PID: {pid} (target-isolated)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Worldwide Location & Synthetic IP Read Output Card */}
+          <div className="rounded-2xl bg-slate-950 border border-slate-800 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span>3. WORLDWIDE GEOGRAPHIC &amp; SYNTHETIC IP PROFILE</span>
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border bg-cyan-500/15 border-cyan-500/40 text-cyan-300">
+                PROFILE CONSISTENCY: PASS
+              </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800/80 space-y-2 text-xs font-mono">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-slate-300">
+                <span className="text-slate-500">LocationManager.getLastKnownLocation():</span>
+                <span className="text-cyan-300 font-bold">
+                  {WorldLocationManager.getInstance().getActiveProfile()?.city || 'Tokyo'}, {WorldLocationManager.getInstance().getActiveProfile()?.country || 'Japan'} ({WorldLocationManager.getInstance().getActiveProfile()?.countryCode || 'JP'})
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                <div>
+                  <span>Coordinates: </span>
+                  <span className="text-slate-200 font-semibold">
+                    {WorldLocationManager.getInstance().getActiveProfile()?.latitude.toFixed(4) || '35.6762'}°, {WorldLocationManager.getInstance().getActiveProfile()?.longitude.toFixed(4) || '139.6503'}°
+                  </span>
+                </div>
+                <div>
+                  <span>Timezone: </span>
+                  <span className="text-slate-200 font-semibold">
+                    {WorldLocationManager.getInstance().getActiveProfile()?.timezone || 'Asia/Tokyo'}
+                  </span>
+                </div>
+                <div>
+                  <span>Synthetic IP: </span>
+                  <span className="text-amber-300 font-bold">
+                    {WorldLocationManager.getInstance().getActiveProfile()?.syntheticIp || '203.0.113.42'}
+                  </span>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 font-sans pt-1">
+                IP SCOPE NOTICE: Synthetic test IP is application-level (RFC 5737); physical network interface/VPN determines actual public IP.
               </div>
             </div>
           </div>

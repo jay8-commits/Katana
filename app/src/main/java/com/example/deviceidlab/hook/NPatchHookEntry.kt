@@ -48,6 +48,8 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         installBuildHooks(lpparam)
         installTelephonyHooks(lpparam)
         installWifiHooks(lpparam)
+        installNetworkInterfaceHooks(lpparam)
+        installLocationHooks(lpparam)
     }
 
     // -------------------------------------------------------------------------
@@ -513,11 +515,13 @@ class NPatchHookEntry : IXposedHookLoadPackage {
     }
 
     // -------------------------------------------------------------------------
-    // 4. WifiInfo Hooks
+    // 4. WifiInfo & Network Information Hooks
     // -------------------------------------------------------------------------
     private fun installWifiHooks(lpparam: LoadPackageParam) {
         try {
             val wifiInfoClass = XposedHelpers.findClass("android.net.wifi.WifiInfo", lpparam.classLoader)
+
+            // 4.1 WifiInfo.getMacAddress()
             XposedHelpers.findAndHookMethod(
                 wifiInfoClass,
                 "getMacAddress",
@@ -543,8 +547,249 @@ class NPatchHookEntry : IXposedHookLoadPackage {
                 }
             )
             log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getMacAddress()")
+
+            // 4.2 WifiInfo.getIpAddress() -> little-endian 32-bit int
+            XposedHelpers.findAndHookMethod(
+                wifiInfoClass,
+                "getIpAddress",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            log("EVENT: API_INVOCATION_INTERCEPTED | API: WifiInfo.getIpAddress() | Target: ${lpparam.packageName}")
+                            val syntheticIp = queryIpcValue(null, NPatchConfig.KEY_TEST_IPV4)
+                                ?: queryIpcValue(null, NPatchConfig.KEY_LOC_SYNTHETIC_IP)
+                                ?: "192.0.2.101"
+                            val ipInt = parseIpv4ToLittleEndianInt(syntheticIp)
+                            param.result = ipInt
+                            log("EVENT: VALUE_REPLACED | API: WifiInfo.getIpAddress() | Target: ${lpparam.packageName} | Replaced: $syntheticIp (int=$ipInt)")
+                        } catch (e: Throwable) {
+                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: WifiInfo.getIpAddress | Error: ${e.message}")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getIpAddress()")
+
+            // 4.3 WifiInfo.getSSID()
+            XposedHelpers.findAndHookMethod(
+                wifiInfoClass,
+                "getSSID",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            val spoofedSsid = queryIpcValue(null, NPatchConfig.KEY_WIFI_SSID) ?: "\"TestLab-WiFi\""
+                            param.result = spoofedSsid
+                            log("EVENT: VALUE_REPLACED | API: WifiInfo.getSSID() | Target: ${lpparam.packageName} | Replaced: $spoofedSsid")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getSSID()")
+
+            // 4.4 WifiInfo.getBSSID()
+            XposedHelpers.findAndHookMethod(
+                wifiInfoClass,
+                "getBSSID",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            val spoofedBssid = queryIpcValue(null, NPatchConfig.KEY_WIFI_BSSID) ?: "02:00:00:00:00:00"
+                            param.result = spoofedBssid
+                            log("EVENT: VALUE_REPLACED | API: WifiInfo.getBSSID() | Target: ${lpparam.packageName} | Replaced: $spoofedBssid")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: WifiInfo.getBSSID()")
+
+            // 4.5 WifiManager.getDhcpInfo()
+            val wifiManagerClass = XposedHelpers.findClass("android.net.wifi.WifiManager", lpparam.classLoader)
+            XposedHelpers.findAndHookMethod(
+                wifiManagerClass,
+                "getDhcpInfo",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            log("EVENT: API_INVOCATION_INTERCEPTED | API: WifiManager.getDhcpInfo() | Target: ${lpparam.packageName}")
+                            val syntheticIp = queryIpcValue(null, NPatchConfig.KEY_TEST_IPV4)
+                                ?: queryIpcValue(null, NPatchConfig.KEY_LOC_SYNTHETIC_IP)
+                                ?: "192.0.2.101"
+                            val ipInt = parseIpv4ToLittleEndianInt(syntheticIp)
+                            val parts = syntheticIp.split(".")
+                            val gatewayStr = if (parts.size == 4) "${parts[0]}.${parts[1]}.${parts[2]}.1" else "192.0.2.1"
+                            val gatewayInt = parseIpv4ToLittleEndianInt(gatewayStr)
+
+                            val dhcp = android.net.DhcpInfo()
+                            dhcp.ipAddress = ipInt
+                            dhcp.gateway = gatewayInt
+                            dhcp.serverAddress = gatewayInt
+                            dhcp.netmask = 0x00FFFFFF // 255.255.255.0 little-endian
+                            dhcp.dns1 = parseIpv4ToLittleEndianInt("8.8.8.8")
+                            dhcp.dns2 = parseIpv4ToLittleEndianInt("8.8.4.4")
+
+                            param.result = dhcp
+                            log("EVENT: VALUE_REPLACED | API: WifiManager.getDhcpInfo() | Target: ${lpparam.packageName} | Replaced: IP=$syntheticIp, GW=$gatewayStr")
+                        } catch (e: Throwable) {
+                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: WifiManager.getDhcpInfo | Error: ${e.message}")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: WifiManager.getDhcpInfo()")
+
         } catch (e: Throwable) {
-            log("WifiInfo hook skipped: ${e.message}")
+            log("Wifi hooks skipped: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 4.6 Java NetworkInterface Hooks (getHardwareAddress)
+    // -------------------------------------------------------------------------
+    private fun installNetworkInterfaceHooks(lpparam: LoadPackageParam) {
+        try {
+            val netIfClass = XposedHelpers.findClass("java.net.NetworkInterface", lpparam.classLoader)
+            XposedHelpers.findAndHookMethod(
+                netIfClass,
+                "getHardwareAddress",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        try {
+                            isHookExecuting.set(true)
+                            val spoofedMac = queryIpcValue(null, NPatchConfig.KEY_MAC)
+                            if (!spoofedMac.isNullOrEmpty()) {
+                                val macBytes = parseMacToBytes(spoofedMac)
+                                if (macBytes != null) {
+                                    param.result = macBytes
+                                    log("EVENT: VALUE_REPLACED | API: NetworkInterface.getHardwareAddress() | Target: ${lpparam.packageName} | Replaced: ${TestApiCatalog.maskValue(spoofedMac)}")
+                                }
+                            }
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: NetworkInterface.getHardwareAddress()")
+        } catch (e: Throwable) {
+            log("NetworkInterface hook skipped: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Location Subsystem Hooks
+    // -------------------------------------------------------------------------
+    private fun installLocationHooks(lpparam: LoadPackageParam) {
+        try {
+            val locationManagerClass = XposedHelpers.findClass("android.location.LocationManager", lpparam.classLoader)
+
+            // 5.1 Hook getLastKnownLocation(String)
+            XposedHelpers.findAndHookMethod(
+                locationManagerClass,
+                "getLastKnownLocation",
+                String::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        val requestedProvider = (param.args.getOrNull(0) as? String) ?: "gps"
+                        try {
+                            isHookExecuting.set(true)
+                            log("EVENT: API_INVOCATION_INTERCEPTED | API: LocationManager.getLastKnownLocation($requestedProvider) | Target: ${lpparam.packageName}")
+                            val locProfile = queryLocationIpcProfile(null)
+                            if (locProfile != null) {
+                                val locationClass = XposedHelpers.findClass("android.location.Location", lpparam.classLoader)
+                                val syntheticLoc = XposedHelpers.newInstance(locationClass, requestedProvider)
+                                XposedHelpers.callMethod(syntheticLoc, "setLatitude", locProfile.latitude)
+                                XposedHelpers.callMethod(syntheticLoc, "setLongitude", locProfile.longitude)
+                                XposedHelpers.callMethod(syntheticLoc, "setAltitude", locProfile.altitude)
+                                XposedHelpers.callMethod(syntheticLoc, "setAccuracy", locProfile.accuracy)
+                                XposedHelpers.callMethod(syntheticLoc, "setSpeed", locProfile.speed)
+                                XposedHelpers.callMethod(syntheticLoc, "setBearing", locProfile.bearing)
+                                XposedHelpers.callMethod(syntheticLoc, "setTime", locProfile.timestamp)
+                                try {
+                                    XposedHelpers.callMethod(syntheticLoc, "setElapsedRealtimeNanos", locProfile.elapsedRealtimeNanos)
+                                } catch (_: Throwable) {}
+
+                                param.result = syntheticLoc
+                                log("EVENT: VALUE_REPLACED | API: LocationManager.getLastKnownLocation($requestedProvider) | Target: ${lpparam.packageName} | Replaced: Lat=${locProfile.latitude}, Lng=${locProfile.longitude}, Alt=${locProfile.altitude}")
+                            } else {
+                                log("EVENT: PROFILE_LOOKUP_FAILED | Subsystem: location | Key: locationProfile")
+                            }
+                        } catch (e: Throwable) {
+                            log("EVENT: HOOK_EXECUTION_EXCEPTION | Method: getLastKnownLocation | Error: ${e.message}")
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        val requestedProvider = (param.args.getOrNull(0) as? String) ?: "gps"
+                        try {
+                            isHookExecuting.set(true)
+                            val locProfile = queryLocationIpcProfile(null)
+                            if (locProfile != null) {
+                                val locationClass = XposedHelpers.findClass("android.location.Location", lpparam.classLoader)
+                                val syntheticLoc = XposedHelpers.newInstance(locationClass, requestedProvider)
+                                XposedHelpers.callMethod(syntheticLoc, "setLatitude", locProfile.latitude)
+                                XposedHelpers.callMethod(syntheticLoc, "setLongitude", locProfile.longitude)
+                                XposedHelpers.callMethod(syntheticLoc, "setAltitude", locProfile.altitude)
+                                XposedHelpers.callMethod(syntheticLoc, "setAccuracy", locProfile.accuracy)
+                                XposedHelpers.callMethod(syntheticLoc, "setSpeed", locProfile.speed)
+                                XposedHelpers.callMethod(syntheticLoc, "setBearing", locProfile.bearing)
+                                XposedHelpers.callMethod(syntheticLoc, "setTime", locProfile.timestamp)
+                                try {
+                                    XposedHelpers.callMethod(syntheticLoc, "setElapsedRealtimeNanos", locProfile.elapsedRealtimeNanos)
+                                } catch (_: Throwable) {}
+
+                                param.throwable = null
+                                param.result = syntheticLoc
+                            }
+                        } catch (_: Throwable) {
+                        } finally {
+                            isHookExecuting.set(false)
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: LocationManager.getLastKnownLocation(String)")
+
+            // 5.2 Hook isProviderEnabled(String)
+            XposedHelpers.findAndHookMethod(
+                locationManagerClass,
+                "isProviderEnabled",
+                String::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (isHookExecuting.get() == true) return
+                        val provider = (param.args.getOrNull(0) as? String) ?: ""
+                        if (provider == "gps" || provider == "network" || provider == "fused") {
+                            param.result = true
+                            log("EVENT: VALUE_REPLACED | API: LocationManager.isProviderEnabled($provider) -> true")
+                        }
+                    }
+                }
+            )
+            log("EVENT: HOOK_REGISTERED | Hook: LocationManager.isProviderEnabled(String)")
+
+        } catch (e: Throwable) {
+            log("LocationManager hooks skipped: ${e.message}")
         }
     }
 
@@ -571,12 +816,89 @@ class NPatchHookEntry : IXposedHookLoadPackage {
         }
     }
 
+    private fun queryLocationIpcProfile(cr: ContentResolver?): com.example.deviceidlab.model.LocationProfile? {
+        val resolver = cr ?: resolveContentResolver() ?: return null
+        return try {
+            val locUri = NPatchConfig.LOCATION_PROVIDER_URI
+            resolver.query(locUri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val jsonIdx = cursor.getColumnIndex(NPatchConfig.KEY_LOC_JSON)
+                    if (jsonIdx >= 0) {
+                        val json = cursor.getString(jsonIdx)
+                        if (!json.isNullOrEmpty()) {
+                            try {
+                                val worldwide = com.example.deviceidlab.manager.LocationJsonSerializer.parseWorldwide(json)
+                                log("EVENT: VALUE_GENERATED | Worldwide Profile: ${worldwide.city}, ${worldwide.country} | Coords: ${worldwide.latitude}, ${worldwide.longitude} | TZ: ${worldwide.timezone} | Synthetic IP: ${worldwide.syntheticIp}")
+                                return@use worldwide.toLocationProfile()
+                            } catch (_: Throwable) {
+                                return@use com.example.deviceidlab.manager.LocationJsonSerializer.parse(json)
+                            }
+                        }
+                    }
+                    val latIdx = cursor.getColumnIndex(NPatchConfig.KEY_LOC_LATITUDE)
+                    val lngIdx = cursor.getColumnIndex(NPatchConfig.KEY_LOC_LONGITUDE)
+                    if (latIdx >= 0 && lngIdx >= 0) {
+                        val lat = cursor.getString(latIdx)?.toDoubleOrNull() ?: 0.0
+                        val lng = cursor.getString(lngIdx)?.toDoubleOrNull() ?: 0.0
+                        val alt = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_ALTITUDE).coerceAtLeast(0))?.toDoubleOrNull() ?: 0.0
+                        val acc = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_ACCURACY).coerceAtLeast(0))?.toFloatOrNull() ?: 5.0f
+                        val speed = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_SPEED).coerceAtLeast(0))?.toFloatOrNull() ?: 0.0f
+                        val bearing = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_BEARING).coerceAtLeast(0))?.toFloatOrNull() ?: 0.0f
+                        val provider = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_PROVIDER).coerceAtLeast(0)) ?: "gps"
+                        val profileId = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_PROFILE_ID).coerceAtLeast(0)) ?: "loc_ipc"
+                        val city = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_CITY).coerceAtLeast(0)) ?: "Unknown"
+                        val country = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_COUNTRY).coerceAtLeast(0)) ?: "Unknown"
+                        val synthIp = cursor.getString(cursor.getColumnIndex(NPatchConfig.KEY_LOC_SYNTHETIC_IP).coerceAtLeast(0)) ?: "203.0.113.42"
+                        log("EVENT: VALUE_GENERATED | Location IPC: $city, $country ($lat, $lng) IP: $synthIp")
+                        return@use com.example.deviceidlab.model.LocationProfile(
+                            profileId = profileId,
+                            latitude = lat,
+                            longitude = lng,
+                            altitude = alt,
+                            accuracy = acc,
+                            speed = speed,
+                            bearing = bearing,
+                            provider = provider
+                        )
+                    }
+                }
+                null
+            }
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
     private fun resolveContentResolver(): ContentResolver? {
         return try {
             val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", null)
             val currentApp = XposedHelpers.callStaticMethod(activityThreadClass, "currentApplication") as? Application
             currentApp?.contentResolver
         } catch (e: Throwable) {
+            null
+        }
+    }
+
+    private fun parseIpv4ToLittleEndianInt(ip: String?): Int {
+        if (ip.isNullOrEmpty()) return 0
+        val parts = ip.split(".")
+        if (parts.size != 4) return 0
+        val b0 = parts[0].toIntOrNull() ?: 0
+        val b1 = parts[1].toIntOrNull() ?: 0
+        val b2 = parts[2].toIntOrNull() ?: 0
+        val b3 = parts[3].toIntOrNull() ?: 0
+        return (b0 and 0xFF) or ((b1 and 0xFF) shl 8) or ((b2 and 0xFF) shl 16) or ((b3 and 0xFF) shl 24)
+    }
+
+    private fun parseMacToBytes(mac: String?): ByteArray? {
+        if (mac.isNullOrEmpty()) return null
+        val clean = mac.replace(":", "").replace("-", "")
+        if (clean.length != 12) return null
+        return try {
+            ByteArray(6) { i ->
+                clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+            }
+        } catch (_: Throwable) {
             null
         }
     }

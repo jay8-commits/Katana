@@ -180,6 +180,19 @@ export function generateBatteryHealth(identityNumber: number, previousHealth?: n
   return health;
 }
 
+const SYNTHETIC_IP_SALT = 'SyntheticIp_Deterministic_Salt_RFC5737_v1_';
+
+/**
+ * Generates a deterministic synthetic test IPv4 address in RFC 5737 TEST-NET-3
+ * range (203.0.113.0/24, specifically 203.0.113.1 - 203.0.113.254).
+ */
+export function generateSyntheticIpv4(seed: number): string {
+  const input = `${SYNTHETIC_IP_SALT}${seed}`;
+  const digest = sha256(input);
+  const host = 1 + (digest[0] % 254);
+  return `203.0.113.${host}`;
+}
+
 /**
  * Creates a full DeviceIdentity for the specified identity number,
  * binding Fingerprint, Android ID, Phone Number, and Battery Health together.

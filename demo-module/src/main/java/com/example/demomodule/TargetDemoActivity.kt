@@ -38,6 +38,29 @@ class TargetDemoActivity : AppCompatActivity() {
     private lateinit var tvAuditDetails: TextView
     private lateinit var btnRefresh: Button
 
+    private lateinit var tvLocationStatus: TextView
+    private lateinit var tvLocationExpected: TextView
+    private lateinit var tvLocationActual: TextView
+    private lateinit var tvLocationLatMatch: TextView
+    private lateinit var tvLocationLngMatch: TextView
+    private lateinit var tvLocationAltMatch: TextView
+    private lateinit var tvLocationAccMatch: TextView
+    private lateinit var tvLocationWorldProfile: TextView
+    private lateinit var tvLocationSyntheticIp: TextView
+    private lateinit var tvLocationProfileConsistency: TextView
+    private lateinit var tvLocationPublicIpNotice: TextView
+    private lateinit var tvLocationHookEvent: TextView
+    private lateinit var tvLocationDiagnosis: TextView
+
+    private lateinit var tvNetworkStatus: TextView
+    private lateinit var tvNetworkExpectedIp: TextView
+    private lateinit var tvNetworkWifiIp: TextView
+    private lateinit var tvNetworkDhcpIp: TextView
+    private lateinit var tvNetworkWifiSsid: TextView
+    private lateinit var tvNetworkWifiMac: TextView
+    private lateinit var tvNetworkHardwareMac: TextView
+    private lateinit var tvNetworkDiagnosis: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_target_demo)
@@ -46,6 +69,29 @@ class TargetDemoActivity : AppCompatActivity() {
         tvFirstTestExpected = findViewById(R.id.tvFirstTestExpected)
         tvFirstTestActual = findViewById(R.id.tvFirstTestActual)
         tvFirstTestDiagnosis = findViewById(R.id.tvFirstTestDiagnosis)
+
+        tvLocationStatus = findViewById(R.id.tvLocationStatus)
+        tvLocationExpected = findViewById(R.id.tvLocationExpected)
+        tvLocationActual = findViewById(R.id.tvLocationActual)
+        tvLocationLatMatch = findViewById(R.id.tvLocationLatMatch)
+        tvLocationLngMatch = findViewById(R.id.tvLocationLngMatch)
+        tvLocationAltMatch = findViewById(R.id.tvLocationAltMatch)
+        tvLocationAccMatch = findViewById(R.id.tvLocationAccMatch)
+        tvLocationWorldProfile = findViewById(R.id.tvLocationWorldProfile)
+        tvLocationSyntheticIp = findViewById(R.id.tvLocationSyntheticIp)
+        tvLocationProfileConsistency = findViewById(R.id.tvLocationProfileConsistency)
+        tvLocationPublicIpNotice = findViewById(R.id.tvLocationPublicIpNotice)
+        tvLocationHookEvent = findViewById(R.id.tvLocationHookEvent)
+        tvLocationDiagnosis = findViewById(R.id.tvLocationDiagnosis)
+
+        tvNetworkStatus = findViewById(R.id.tvNetworkStatus)
+        tvNetworkExpectedIp = findViewById(R.id.tvNetworkExpectedIp)
+        tvNetworkWifiIp = findViewById(R.id.tvNetworkWifiIp)
+        tvNetworkDhcpIp = findViewById(R.id.tvNetworkDhcpIp)
+        tvNetworkWifiSsid = findViewById(R.id.tvNetworkWifiSsid)
+        tvNetworkWifiMac = findViewById(R.id.tvNetworkWifiMac)
+        tvNetworkHardwareMac = findViewById(R.id.tvNetworkHardwareMac)
+        tvNetworkDiagnosis = findViewById(R.id.tvNetworkDiagnosis)
 
         tvAuditSummary = findViewById(R.id.tvAuditSummary)
         tvAuditDetails = findViewById(R.id.tvAuditDetails)
@@ -662,6 +708,165 @@ class TargetDemoActivity : AppCompatActivity() {
         tvAuditSummary.text = summary
         tvAuditDetails.text = sb.toString()
         Log.d(TAG, summary)
+
+        // Execute Location Verification Subsystem Audit
+        runLocationVerification(expectedProfile)
+
+        // Execute Network Information Verification Subsystem Audit
+        runNetworkVerification(expectedProfile, sb)
+        tvAuditDetails.text = sb.toString()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun runLocationVerification(expectedProfile: Map<String, String>) {
+        val expLatStr = expectedProfile["loc_latitude"]
+        val expLngStr = expectedProfile["loc_longitude"]
+        val expAltStr = expectedProfile["loc_altitude"] ?: "0.0"
+        val expAccStr = expectedProfile["loc_accuracy"] ?: "5.0"
+        val expProvider = expectedProfile["loc_provider"] ?: "gps"
+        val expProfileId = expectedProfile["loc_profile_id"] ?: "preset"
+
+        val expCity = expectedProfile["loc_city"] ?: "Tokyo"
+        val expCountry = expectedProfile["loc_country"] ?: "Japan"
+        val expCountryCode = expectedProfile["loc_country_code"] ?: "JP"
+        val expTimezone = expectedProfile["loc_timezone"] ?: "Asia/Tokyo"
+        val expSyntheticIp = expectedProfile["loc_synthetic_ip"] ?: "203.0.113.42"
+
+        val expLat = expLatStr?.toDoubleOrNull()
+        val expLng = expLngStr?.toDoubleOrNull()
+        val expAlt = expAltStr.toDoubleOrNull() ?: 0.0
+        val expAcc = expAccStr.toFloatOrNull() ?: 5.0f
+
+        val isIpInTestRange = expSyntheticIp.startsWith("203.0.113.") ||
+                              expSyntheticIp.startsWith("198.51.100.") ||
+                              expSyntheticIp.startsWith("192.0.2.")
+        val isProfileConsistent = expCity.isNotEmpty() &&
+                                  expCountry.isNotEmpty() &&
+                                  expLat != null && expLng != null &&
+                                  expTimezone.isNotEmpty() &&
+                                  isIpInTestRange
+
+        tvLocationWorldProfile.text = "WORLD PROFILE: $expCity, $expCountry ($expCountryCode) | Timezone: $expTimezone"
+        tvLocationSyntheticIp.text = "SYNTHETIC TEST IP: $expSyntheticIp (RFC 5737 TEST-NET-3)"
+        tvLocationProfileConsistency.text = "PROFILE CONSISTENCY: ${if (isProfileConsistent) "PASS" else "FAIL"}"
+        tvLocationProfileConsistency.setTextColor(
+            if (isProfileConsistent) android.graphics.Color.parseColor("#15803D")
+            else android.graphics.Color.parseColor("#B91C1C")
+        )
+
+        tvLocationExpected.text = if (expLat != null && expLng != null) {
+            "EXPECTED LOCATION: $expLat, $expLng (alt: ${expAlt}m, acc: ${expAcc}m, prov: $expProvider, id: $expProfileId)"
+        } else {
+            "EXPECTED LOCATION: <missing or invalid IPC location>"
+        }
+
+        val hasFine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasCoarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!hasFine && !hasCoarse) {
+            tvLocationStatus.text = "STATUS: PERMISSION_DENIED"
+            tvLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvLocationActual.text = "ACTUAL LOCATION: <permission not granted>"
+            tvLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvLocationHookEvent.text = "HOOK EVENT: LocationManager.getLastKnownLocation(provider) [Blocked by permission]"
+            tvLocationDiagnosis.text = "DIAGNOSIS: Location permission not granted by target process (PERMISSION_DENIED). Cannot query LocationManager."
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), 101)
+            return
+        }
+
+        val lm = getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+        if (lm == null) {
+            tvLocationStatus.text = "STATUS: PROVIDER_UNAVAILABLE"
+            tvLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvLocationActual.text = "ACTUAL LOCATION: <LocationManager service null>"
+            tvLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvLocationDiagnosis.text = "DIAGNOSIS: System LocationManager unavailable (PROVIDER_UNAVAILABLE)."
+            return
+        }
+
+        var actualLoc: android.location.Location? = null
+        val targetProvider = if (expProvider.isNotEmpty()) expProvider else android.location.LocationManager.GPS_PROVIDER
+
+        try {
+            actualLoc = lm.getLastKnownLocation(targetProvider)
+            if (actualLoc == null && targetProvider != android.location.LocationManager.GPS_PROVIDER) {
+                actualLoc = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+            }
+            if (actualLoc == null && targetProvider != android.location.LocationManager.NETWORK_PROVIDER) {
+                actualLoc = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+            }
+        } catch (e: Throwable) {
+            tvLocationStatus.text = "STATUS: PLATFORM_RESTRICTED"
+            tvLocationStatus.setTextColor(android.graphics.Color.parseColor("#D97706"))
+            tvLocationActual.text = "ACTUAL LOCATION: <SecurityException / Restricted: ${e.message}>"
+            tvLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvLocationDiagnosis.text = "DIAGNOSIS: LocationManager query threw exception: ${e.message}"
+            return
+        }
+
+        if (actualLoc == null) {
+            tvLocationStatus.text = "STATUS: HOOK_NOT_INVOKED"
+            tvLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvLocationActual.text = "ACTUAL LOCATION: null (No fix or hook inactive)"
+            tvLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvLocationDiagnosis.text = "DIAGNOSIS: LocationManager.getLastKnownLocation() returned null. In unhooked Android environment without active GPS fix, getLastKnownLocation() returns null (HOOK_NOT_INVOKED / NOT_PERFORMED)."
+            return
+        }
+
+        val actLat = actualLoc.latitude
+        val actLng = actualLoc.longitude
+        val actAlt = actualLoc.altitude
+        val actAcc = actualLoc.accuracy
+        val actProv = actualLoc.provider ?: "<unknown>"
+
+        tvLocationActual.text = "ACTUAL LOCATION: $actLat, $actLng (alt: ${actAlt}m, acc: ${actAcc}m, prov: $actProv)"
+
+        if (expLat == null || expLng == null) {
+            tvLocationStatus.text = "STATUS: FAIL: NO_EXPECTED_LOCATION"
+            tvLocationLatMatch.text = "LATITUDE MATCH: NO"
+            tvLocationLngMatch.text = "LONGITUDE MATCH: NO"
+            tvLocationAltMatch.text = "ALTITUDE MATCH: NO"
+            tvLocationAccMatch.text = "ACCURACY MATCH: NO"
+            tvLocationDiagnosis.text = "DIAGNOSIS: Expected location profile missing from IPC provider."
+            return
+        }
+
+        val epsilonCoord = 1e-5
+        val epsilonAlt = 0.5
+        val epsilonAcc = 0.1f
+
+        val latMatch = kotlin.math.abs(actLat - expLat) <= epsilonCoord
+        val lngMatch = kotlin.math.abs(actLng - expLng) <= epsilonCoord
+        val altMatch = kotlin.math.abs(actAlt - expAlt) <= epsilonAlt
+        val accMatch = kotlin.math.abs(actAcc - expAcc) <= epsilonAcc
+
+        tvLocationLatMatch.text = "LATITUDE MATCH: ${if (latMatch) "YES (delta < 1e-5)" else "NO (act=$actLat, exp=$expLat)"}"
+        tvLocationLngMatch.text = "LONGITUDE MATCH: ${if (lngMatch) "YES (delta < 1e-5)" else "NO (act=$actLng, exp=$expLng)"}"
+        tvLocationAltMatch.text = "ALTITUDE MATCH: ${if (altMatch) "YES (delta < 0.5m)" else "NO (act=$actAlt, exp=$expAlt)"}"
+        tvLocationAccMatch.text = "ACCURACY MATCH: ${if (accMatch) "YES (delta < 0.1m)" else "NO (act=$actAcc, exp=$expAcc)"}"
+        tvLocationHookEvent.text = "HOOK EVENT: LocationManager.getLastKnownLocation($actProv) -> HOOK_INVOKED"
+
+        if (latMatch && lngMatch) {
+            tvLocationStatus.text = "STATUS: EXPECTED_LOCATION_OBSERVED (PASS)"
+            tvLocationStatus.setTextColor(android.graphics.Color.parseColor("#15803D"))
+            tvLocationDiagnosis.text = "DIAGNOSIS: Target process directly observed synthetic coordinates matching active LocationProfile within tolerance."
+        } else {
+            tvLocationStatus.text = "STATUS: FAIL: LOCATION_MISMATCH"
+            tvLocationStatus.setTextColor(android.graphics.Color.parseColor("#B91C1C"))
+            tvLocationDiagnosis.text = "DIAGNOSIS: Target process observed non-matching location coordinates (Hardware GPS or unhooked default observed)."
+        }
     }
 
     private fun queryActiveProfileFromProvider(): Map<String, String> {
@@ -697,5 +902,82 @@ class TargetDemoActivity : AppCompatActivity() {
         } catch (_: Throwable) {
             "err"
         }
+    }
+
+    private fun runNetworkVerification(expectedProfile: Map<String, String>, sb: StringBuilder) {
+        val expectedIp = expectedProfile["loc_synthetic_ip"] ?: expectedProfile["testIpv4"] ?: "203.0.113.101"
+        tvNetworkExpectedIp.text = "EXPECTED SYNTHETIC IP: $expectedIp"
+
+        var wifiIpStr = "<null>"
+        var wifiSsidStr = "<null>"
+        var wifiMacStr = "<null>"
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            val info = wm?.connectionInfo
+            if (info != null) {
+                val ipInt = info.ipAddress
+                wifiIpStr = if (ipInt != 0) {
+                    "${ipInt and 0xFF}.${(ipInt shr 8) and 0xFF}.${(ipInt shr 16) and 0xFF}.${(ipInt shr 24) and 0xFF}"
+                } else "0.0.0.0"
+                wifiSsidStr = info.ssid ?: "<null>"
+                wifiMacStr = info.macAddress ?: "<null>"
+            }
+        } catch (e: Throwable) {
+            wifiIpStr = "ERR: ${e.message}"
+        }
+
+        var dhcpIpStr = "<null>"
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            val dhcp = wm?.dhcpInfo
+            if (dhcp != null) {
+                val ipInt = dhcp.ipAddress
+                dhcpIpStr = if (ipInt != 0) {
+                    "${ipInt and 0xFF}.${(ipInt shr 8) and 0xFF}.${(ipInt shr 16) and 0xFF}.${(ipInt shr 24) and 0xFF}"
+                } else "0.0.0.0"
+            }
+        } catch (e: Throwable) {
+            dhcpIpStr = "ERR: ${e.message}"
+        }
+
+        var hwMacStr = "<null>"
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                val netIf = interfaces.nextElement()
+                val addr = netIf.hardwareAddress
+                if (addr != null && addr.isNotEmpty()) {
+                    hwMacStr = addr.joinToString(":") { "%02X".format(it) }
+                    break
+                }
+            }
+        } catch (e: Throwable) {
+            hwMacStr = "ERR: ${e.message}"
+        }
+
+        tvNetworkWifiIp.text = "WIFI_INFO IP (getIpAddress): $wifiIpStr"
+        tvNetworkDhcpIp.text = "DHCP_INFO IP (getDhcpInfo): $dhcpIpStr"
+        tvNetworkWifiSsid.text = "WIFI SSID (getSSID): $wifiSsidStr"
+        tvNetworkWifiMac.text = "WIFI MAC (getMacAddress): ${mask(wifiMacStr)}"
+        tvNetworkHardwareMac.text = "HARDWARE MAC (NetworkInterface): ${mask(hwMacStr)}"
+
+        val ipMatches = (wifiIpStr == expectedIp || dhcpIpStr == expectedIp)
+        if (ipMatches) {
+            tvNetworkStatus.text = "STATUS: PASS (CONTROLLED_TEST_IP_MATCH)"
+            tvNetworkStatus.setTextColor(android.graphics.Color.parseColor("#16A34A"))
+            tvNetworkDiagnosis.text = "DIAGNOSIS: Synthetic test IPv4 successfully observed from hooked WiFi / DHCP subsystem without modifying public egress."
+        } else {
+            tvNetworkStatus.text = "STATUS: NOT_HOOKED / UNMODIFIED"
+            tvNetworkStatus.setTextColor(android.graphics.Color.parseColor("#E11D48"))
+            tvNetworkDiagnosis.text = "DIAGNOSIS: Host running without NPatch active or default platform values returned."
+        }
+
+        sb.append("\n[NETWORK AUDIT]\n")
+        sb.append("Expected Test IP: $expectedIp\n")
+        sb.append("WifiInfo.getIpAddress: $wifiIpStr\n")
+        sb.append("WifiManager.getDhcpInfo: $dhcpIpStr\n")
+        sb.append("WifiInfo.getSSID: $wifiSsidStr\n")
+        sb.append("NetworkInterface MAC: ${mask(hwMacStr)}\n")
+        sb.append("Network Status: ${tvNetworkStatus.text}\n")
     }
 }

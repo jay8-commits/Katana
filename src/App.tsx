@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { EducationalBanner } from './components/EducationalBanner';
 import { NpatchInjectionCard } from './components/NpatchInjectionCard';
+import { WorldLocationCard } from './components/WorldLocationCard';
+import { IpClassificationCard } from './components/IpClassificationCard';
 import { RealDeviceCard } from './components/RealDeviceCard';
 import { SimulatedIdentityCard } from './components/SimulatedIdentityCard';
 import { InterceptionDemoCard } from './components/InterceptionDemoCard';
@@ -10,18 +12,23 @@ import { TargetDemoModal } from './components/TargetDemoModal';
 import { ResetConfirmDialog } from './components/ResetConfirmDialog';
 import { DeviceIdentityManager } from './services/identityManager';
 import { HookInterceptionBridge } from './services/hookInterceptionBridge';
+import { WorldLocationManager } from './services/worldLocationManager';
 import { DeviceIdentity } from './types';
 import { CheckCircle, Info } from 'lucide-react';
 
 export const App: React.FC = () => {
   const manager = DeviceIdentityManager.getInstance();
   const bridge = HookInterceptionBridge.getInstance();
+  const worldLocationManager = WorldLocationManager.getInstance();
 
   const [currentIdentity, setCurrentIdentity] = useState<DeviceIdentity | null>(
     manager.getCurrentIdentity()
   );
   const [isHookActive, setIsHookActive] = useState<boolean>(
     bridge.getIsInterceptionActive()
+  );
+  const [activeWorldwideProfile, setActiveWorldwideProfile] = useState(
+    worldLocationManager.getActiveProfile()
   );
   const [isTargetModalOpen, setIsTargetModalOpen] = useState<boolean>(false);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState<boolean>(false);
@@ -36,11 +43,16 @@ export const App: React.FC = () => {
       setIsHookActive(bridge.getIsInterceptionActive());
     });
 
+    const unsubLocation = worldLocationManager.subscribe(() => {
+      setActiveWorldwideProfile(worldLocationManager.getActiveProfile());
+    });
+
     return () => {
       unsubManager();
       unsubBridge();
+      unsubLocation();
     };
-  }, [manager, bridge]);
+  }, [manager, bridge, worldLocationManager]);
 
   const showSnackbar = (msg: string) => {
     setSnackbarMessage(msg);
@@ -81,7 +93,13 @@ export const App: React.FC = () => {
           onShowSnackbar={showSnackbar}
         />
 
-        {/* Section 2: Real Device Identifiers (Standard OS Platform Query) */}
+        {/* Section 2: Worldwide Location & Synthetic IP Subsystem */}
+        <WorldLocationCard onShowSnackbar={showSnackbar} />
+
+        {/* Section 3: IP Source Classification & Egress Clarification */}
+        <IpClassificationCard syntheticIp={activeWorldwideProfile.syntheticIp} />
+
+        {/* Section 4: Real Device Identifiers (Standard OS Platform Query) */}
         <RealDeviceCard onShowSnackbar={showSnackbar} />
 
         {/* Section 3: 1,000,000 Simulated Identity Pool Manager */}

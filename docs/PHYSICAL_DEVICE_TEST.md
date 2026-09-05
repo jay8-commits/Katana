@@ -104,3 +104,40 @@ If the test does not show `PASS`, use this table to immediately isolate the root
 | **`FAIL`** | `PROFILE_LOOKUP_FAILED` | `API_INVOCATION_INTERCEPTED` appears, followed by `PROFILE_LOOKUP_FAILED` | Target cannot query `DeviceIdProvider`. Check if controller app was installed, or if permissions/SELinux blocked Provider IPC. |
 | **`FAIL`** | `ORIGINAL_VALUE_NULL` | Target observed `null` | Framework returned `null` and hook was bypassed. |
 | **`PASS`** | `GENERATED_VALUE_OBSERVED` | Full sequence: `INTERCEPTED` $\rightarrow$ `LOOKUP_SUCCESS` $\rightarrow$ `VALUE_REPLACED` $\rightarrow$ `TARGET_VERIFICATION_RESULT` | **Interception succeeded on real hardware.** |
+
+---
+
+## 6. Worldwide Location & Synthetic IP Physical-Device Test Procedure
+
+> **Status in Current Container**: `NOT_PERFORMED` (Awaiting physical hardware test).
+
+### Procedure:
+
+1. **Grant Location Permission to Target**:
+   ```bash
+   adb shell pm grant com.example.demomodule android.permission.ACCESS_FINE_LOCATION
+   adb shell pm grant com.example.demomodule android.permission.ACCESS_COARSE_LOCATION
+   ```
+
+2. **Select Target Location Profile #1 (Tokyo)**:
+   - In Controller (`com.example.deviceidlab`), choose **Tokyo, Japan** (`as_tok`).
+   - Confirm active profile coordinates: `35.6762, 139.6503`, Timezone: `Asia/Tokyo`, Synthetic IP: `203.0.113.42`.
+
+3. **Verify in Target Demo #1**:
+   - Open `com.example.demomodule`.
+   - Tap **"Run Android ID Audit & Full Verification"**.
+   - Check **Location Audit Card**:
+     - `STATUS`: `EXPECTED_LOCATION_OBSERVED (PASS)`
+     - `LATITUDE MATCH`: `YES (delta < 1e-5)`
+     - `LONGITUDE MATCH`: `YES (delta < 1e-5)`
+     - `WORLD PROFILE`: `Tokyo, Japan (JP) | Timezone: Asia/Tokyo`
+     - `SYNTHETIC TEST IP`: `203.0.113.42 (RFC 5737 TEST-NET-3)`
+     - `PROFILE CONSISTENCY`: `PASS`
+
+4. **Test Multi-Profile Zero-Restart Transition (Switch to London)**:
+   - Without closing `com.example.demomodule`, return to Controller.
+   - Select **London, United Kingdom** (`eu_lon`).
+   - Return to `com.example.demomodule` and tap **"Re-Query"**.
+   - Observe immediate transition to London coordinates (`51.5074, -0.1278`), Timezone: `Europe/London`, Synthetic IP: `203.0.113.88`.
+   - Verify that **NO target app restart or re-patching was needed**.
+
